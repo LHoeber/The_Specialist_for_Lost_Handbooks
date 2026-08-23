@@ -4,6 +4,7 @@ from threading import Thread
 
 from game.environment import Environment
 from game.enums import Action
+from interaction import MouseInteraction
 from rendering.renderer import Renderer
 
 
@@ -25,6 +26,7 @@ def main():
     print_observation(observation)
 
     commands = Queue()
+    mouse_interaction = MouseInteraction()
 
     def read_commands():
         while True:
@@ -44,6 +46,17 @@ def main():
                     running = False
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
                     renderer.toggle_debug_grid()
+
+                mouse_result = mouse_interaction.handle_event(
+                    event, env, renderer
+                )
+                if mouse_result is not None:
+                    observation, reward, terminated, info = mouse_result
+                    print_observation(observation)
+                    print("Reward:", reward)
+                    if terminated:
+                        print("GAME OVER")
+                        running = False
 
             elapsed_seconds = renderer.clock.tick(env.fps) / 1000
             if env.update(elapsed_seconds):

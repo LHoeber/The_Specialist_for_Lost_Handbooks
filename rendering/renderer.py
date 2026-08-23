@@ -127,6 +127,7 @@ class Renderer:
         self.large_font = pygame.font.SysFont(None, 40)
         self.debug_grid_enabled = False
         self.debug_grid_step = 50
+        self.drag_position = None
 
         self.heater = AutoNamespace()
         self.centrifuge = AutoNamespace()
@@ -170,6 +171,41 @@ class Renderer:
 
     def toggle_debug_grid(self):
         self.debug_grid_enabled = not self.debug_grid_enabled
+
+    def set_drag_position(self, position):
+        self.drag_position = position
+
+    def clear_drag_position(self):
+        self.drag_position = None
+
+    def get_container_rect(self, state):
+        location = state.mix_container.location
+        position = positions[location]
+        offset = center_offsets[location]
+        return pygame.Rect(
+            position.x + offset.x,
+            position.y + offset.y,
+            self.containers.beaker.get_width(),
+            self.containers.beaker.get_height(),
+        )
+
+    def location_at(self, game_pos):
+        for location in (
+            Location.START,
+            Location.END,
+            Location.HEATER,
+            Location.CENTRIFUGE,
+            Location.PRESS,
+        ):
+            rect = pygame.Rect(
+                positions[location].x,
+                positions[location].y,
+                sizes[location].x,
+                sizes[location].y,
+            )
+            if rect.collidepoint(game_pos):
+                return location
+        return None
 
     def draw_debug_grid(self):
         grid = pygame.Surface(self.game_surface.get_size(), pygame.SRCALPHA)
@@ -348,8 +384,11 @@ class Renderer:
             return
 
         # Simple flask
-        x_loc = positions[state.mix_container.location].x+center_offsets[state.mix_container.location].x
-        y_loc = positions[state.mix_container.location].y+center_offsets[state.mix_container.location].y
+        if self.drag_position is None:
+            x_loc = positions[state.mix_container.location].x + center_offsets[state.mix_container.location].x
+            y_loc = positions[state.mix_container.location].y + center_offsets[state.mix_container.location].y
+        else:
+            x_loc, y_loc = self.drag_position
         self.game_surface.blit(
             self.containers.beaker,
             (x_loc, y_loc)
@@ -388,8 +427,11 @@ class Renderer:
             masks = [ self.mixture.mask_1_beaker,self.mixture.mask_2_beaker,self.mixture.mask_3_beaker]
 
             # Position of the beaker
-            x_loc = positions[state.mix_container.location].x+center_offsets[state.mix_container.location].x
-            y_loc = positions[state.mix_container.location].y+center_offsets[state.mix_container.location].y
+            if self.drag_position is None:
+                x_loc = positions[state.mix_container.location].x + center_offsets[state.mix_container.location].x
+                y_loc = positions[state.mix_container.location].y + center_offsets[state.mix_container.location].y
+            else:
+                x_loc, y_loc = self.drag_position
 
             # Draw each material using its mask
             for i, mat in enumerate(materials):
