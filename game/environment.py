@@ -61,7 +61,7 @@ class Environment:
           self.state.add_material(Material(Color.WHITE, MaterialType.POWDER))
 
       elif action == Action.MOVE_TO_HEATER:
-          self.state.move_container(self.state.mix_container.location,Location.HEATER)
+        self.state.move_container(self.state.mix_container.location,Location.HEATER)
 
       elif action == Action.MOVE_TO_START:
             self.state.move_container(self.state.mix_container.location,Location.START)
@@ -87,17 +87,42 @@ class Environment:
       elif action == Action.HEATER_DECREASE:
           self.state.heater.level = Level(max(self.state.heater.level.value-1,Level.OFF.value))
 
+      elif action == Action.HEATER_LEVEL_CYCLE:
+          next_level = self.state.heater.level.value + 1
+          if next_level > self.state.heater.max_level.value:
+              next_level = Level.OFF.value
+          self.state.check_heater_level(next_level)
+
       elif action == Action.HEATER_OPEN:
           self.state.heater.open =True
           self.state.heater.max_level = Level.MEDIUM
+          self.state.heater.level = Level(min(
+              self.state.heater.level.value,
+              self.state.heater.max_level.value,
+          ))
+          if self.state.mix_container.location == Location.HEATER:
+                self.state.mix_container.mixture.visible = True
+          if self.state.mix_container.location == Location.HEATER:
+                      self.state.mix_container.visible = True
+        
       elif action == Action.HEATER_CLOSE:
           self.state.heater.open = False
           self.state.heater.max_level = Level.HIGH
-
+          if self.state.mix_container.location == Location.HEATER:
+                      self.state.mix_container.mixture.visible = False
+                      self.state.mix_container.visible = False
+        
       elif action == Action.CENTRIFUGE_INCREASE:
            self.state.centrifuge.level = Level(min(self.state.centrifuge.level.value+1,Level.HIGH.value))
       elif action == Action.CENTRIFUGE_DECREASE:
            self.state.centrifuge.level = Level(max(self.state.centrifuge.level.value-1,Level.OFF.value))
+
+      elif action == Action.CENTRIFUGE_LEVEL_CYCLE:
+           if not self.state.centrifuge.active:
+              next_level = self.state.centrifuge.level.value + 1
+              if next_level > Level.HIGH.value or next_level < Level.LOW.value:
+                  next_level = Level.LOW.value
+              self.state.centrifuge.level = Level(next_level)
 
       elif action == Action.CENTRIFUGE_START:
            if not(self.state.centrifuge.open):
@@ -117,13 +142,26 @@ class Environment:
       elif action == Action.CENTRIFUGE_OPEN:
            if not(self.state.centrifuge.active):
             self.state.centrifuge.open = True
+           if self.state.mix_container.mixture.current_container == Location.CENTRIFUGE:
+                          self.state.mix_container.mixture.visible = True
+           if self.state.mix_container.location == Location.CENTRIFUGE:
+                      self.state.mix_container.visible = True
       elif action == Action.CENTRIFUGE_CLOSE:
            self.state.centrifuge.open = False
+           if self.state.mix_container.mixture.current_container == Location.CENTRIFUGE:
+                          self.state.mix_container.mixture.visible = False
+        
 
       elif action == Action.PRESS_START:
                 self.state.compress_start()
       elif action == Action.PRESS_STOP:
                 self.state.compress_stop()
+      elif action == Action.PRESS_LEVEL_CYCLE:
+          if not self.state.press.active:
+              next_level = self.state.press.level.value + 1
+              if next_level > Level.HIGH.value or next_level < Level.LOW.value:
+                  next_level = Level.LOW.value
+              self.state.press.level = Level(next_level)
 
       elif action == Action.PRESS_FILL:
           if self.state.centrifuge.open:

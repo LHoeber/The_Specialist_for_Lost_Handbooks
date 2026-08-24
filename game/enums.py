@@ -70,9 +70,11 @@ class Action(Enum):
     HEATER_DECREASE = auto()
     HEATER_OPEN= auto()
     HEATER_CLOSE = auto()
+    HEATER_LEVEL_CYCLE = auto()
 
     CENTRIFUGE_INCREASE = auto()
     CENTRIFUGE_DECREASE = auto()
+    CENTRIFUGE_LEVEL_CYCLE = auto()
 
     CENTRIFUGE_START = auto()
     CENTRIFUGE_STOP = auto()    
@@ -86,6 +88,7 @@ class Action(Enum):
 
     PRESS_START = auto()
     PRESS_STOP = auto()
+    PRESS_LEVEL_CYCLE = auto()
     PRESS_OPEN = auto()
     PRESS_CLOSE = auto()    
     PRESS_FILL = auto()

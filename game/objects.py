@@ -15,11 +15,16 @@ class Mixture:
   mixed: bool = False
   shape: Shape = Shape.LIQUID
   current_container: Location = Location.CONTAINER
+  visible: bool = True
 
   def empty(self):
     self.material_1 = Material()
     self.material_2 = Material()
     self.material_3 = Material()
+    self.mixed = False
+    self.shape = Shape.LIQUID
+    self.current_container = Location.CONTAINER
+    self.visible = True
 
   def add(self, new_material: Material) -> bool:
       if self.material_1.color is None:
@@ -75,8 +80,6 @@ class Mixture:
           for material in materials:
             material.color = result_color
 
-
-
 @dataclass
 class Container:
   type: ContainerType = ContainerType.BEAKER
@@ -86,10 +89,19 @@ class Container:
   compression_time_start: float = 0
   mixture: Mixture = field(default_factory=Mixture)
   location: Location = Location.START
+  visible: bool = True
 
   def reset(self):
    self.location = Location.START
    self.mixture.empty()
+
+@dataclass
+class Button:
+  active: bool = False
+
+@dataclass
+class LevelSelector:
+  level: Level = Level.OFF
 
 @dataclass
 class Bin:
@@ -104,7 +116,7 @@ class Heater:
   
 @dataclass
 class Centrifuge:
-  level: Level = Level.OFF
+  level: Level = Level.LOW
   to_clean: bool = False
   open: bool = False
   active: bool = False

@@ -18,8 +18,11 @@ class GameState:
 
     # Heater
     heater: Heater = field(default_factory=Heater)
+    heater_level_selector: LevelSelector = field(default_factory=LevelSelector)
     # Centrifuge
     centrifuge: Centrifuge = field(default_factory=Centrifuge)
+    centrifuge_button: Button = field(default_factory=Button)
+    cetnrifuge_level_selector: LevelSelector = field(default_factory=LevelSelector)
     # Press
     press: Press = field(default_factory=Press)
     # Bin
@@ -43,7 +46,7 @@ class GameState:
               container.reset()
               self.beaker_available = max(0,self.beaker_available-1)
               self.heater.to_clean = True
-          else:
+          elif level_new != Level.OFF:
             container.mixture.heat(level_new)
 
     def mix(self,level: Level):
@@ -101,6 +104,11 @@ class GameState:
         self.press.active = False
 
     def move_container(self,loc_from: Location, loc_to: Location):
+      if (
+          (loc_from == Location.HEATER or loc_to == Location.HEATER)
+          and not self.heater.open
+      ):
+        return
       if loc_from == self.mix_container.location:
         self.mix_container.location = loc_to
 

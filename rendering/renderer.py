@@ -5,6 +5,7 @@ from rendering.assets import *
 from types import SimpleNamespace
 
 from game.enums import (
+    Action,
     Location,
     Color,
     GameStatus,
@@ -57,28 +58,19 @@ COLOR_RGB = {
     Color.BLACK: (20, 20, 20),
     None: None
 }
-sizes = {
-    Location.CENTRIFUGE: {"x": 220, "y": 200},
-    Location.HEATER:     {"x": 220, "y": 200},
-    Location.PRESS:      {"x": 220, "y": 200},
-    Location.START:      {"x": 100, "y": 100},
-    Location.END:        {"x": 100, "y": 100},
-    "mix_container": {"x": 60, "y": 80},
-}
-
 positions = {
-    Location.CENTRIFUGE: {"x": 400, "y": 60},
-    Location.HEATER:     {"x": 380, "y": 250},
-    Location.PRESS:      {"x": 680, "y": 250},
+    Location.CENTRIFUGE: {"x": 400, "y": 160},
+    Location.HEATER:     {"x": 380, "y": 350},
+    Location.PRESS:      {"x": 710, "y": 375},
     Location.BIN:        {"x": 250, "y": 520},
     Location.SHELF:      {"x": 0, "y": 120},
     Location.START:      {"x": 250, "y": 400},
-    Location.END:        {"x": 800, "y": 400},
+    Location.END:        {"x": 900, "y": 400},
 }
 center_offsets = defaultdict(lambda: {"x":0,"y":0},{
     Location.CENTRIFUGE: {"x": 150, "y": 150},
     Location.HEATER:     {"x": 85, "y": 133},
-    Location.PRESS:      {"x": 50, "y": 50},
+    Location.PRESS:      {"x": 190, "y": 175},
     Location.BIN:        {"x": 50, "y": 50},
     Location.SHELF:      {"x": 0, "y": 0},
     Location.START:      {"x": 0, "y": 0},
@@ -86,7 +78,6 @@ center_offsets = defaultdict(lambda: {"x":0,"y":0},{
 })
 
 positions = DotMap(positions)
-sizes =DotMap(sizes)
 center_offsets = DotMap(center_offsets)
 
 #relative positions
@@ -94,8 +85,17 @@ rel_shelf = positions[Location.SHELF]
 positions[Location.ACID] =         {"x": rel_shelf.x+45, "y": rel_shelf.y+65}
 positions[Location.ALKALINE] =         {"x": rel_shelf.x+45, "y": rel_shelf.y+185}
 positions[Location.POWDER] =         {"x": rel_shelf.x+30, "y": rel_shelf.y+340}
+rel_centrifuge = positions[Location.CENTRIFUGE]
+positions[Action.CENTRIFUGE_START] = {"x": rel_centrifuge.x+40, "y": rel_centrifuge.y+180}
+positions[Action.CENTRIFUGE_STOP] = positions[Action.CENTRIFUGE_START]
+positions[Action.CENTRIFUGE_LEVEL_CYCLE] = {"x": rel_centrifuge.x+70, "y": rel_centrifuge.y+173}
+rel_centrifuge = positions[Location.HEATER]
+positions[Action.HEATER_LEVEL_CYCLE] = {"x": rel_centrifuge.x+200, "y": rel_centrifuge.y+90}
+rel_press = positions[Location.PRESS]
+positions[Action.PRESS_START] = {"x": rel_press.x+50, "y": rel_press.y+200}
+positions[Action.PRESS_STOP] = positions[Action.PRESS_START]
+positions[Action.PRESS_LEVEL_CYCLE] = {"x": rel_press.x+80, "y": rel_press.y+200}
 positions = DotMap(positions)
-sizes =DotMap(sizes)
  
 class Renderer:
 
@@ -178,31 +178,112 @@ class Renderer:
     def clear_drag_position(self):
         self.drag_position = None
 
-    def get_container_rect(self, state):
-        location = state.mix_container.location
+    def _rect_for_sprite(self, location, sprite, offset=None):
         position = positions[location]
-        offset = center_offsets[location]
-        return pygame.Rect(
-            position.x + offset.x,
-            position.y + offset.y,
-            self.containers.beaker.get_width(),
-            self.containers.beaker.get_height(),
+        x = position.x
+        y = position.y
+        if offset is not None:
+            x += offset.x
+            y += offset.y
+        return pygame.Rect(x, y, sprite.get_width(), sprite.get_height())
+
+    def get_container_rect(self, state):
+        return self._rect_for_sprite(
+            state.mix_container.location,
+            self.containers.beaker,
+            center_offsets[state.mix_container.location],
         )
 
-    def location_at(self, game_pos):
-        for location in (
-            Location.START,
-            Location.END,
-            Location.HEATER,
-            Location.CENTRIFUGE,
-            Location.PRESS,
-        ):
-            rect = pygame.Rect(
-                positions[location].x,
-                positions[location].y,
-                sizes[location].x,
-                sizes[location].y,
-            )
+    def target_at(self, game_pos, state):
+        target_sprites = {
+            Action.HEATER_LEVEL_CYCLE: (
+                {
+                    Level.OFF: self.indicators.levels.off,
+                    Level.LOW: self.indicators.levels.low,
+                    Level.MEDIUM: self.indicators.levels.medium,
+                    Level.HIGH: self.indicators.levels.high,
+                }[state.heater.level],
+                True,
+            ),
+            Action.CENTRIFUGE_STOP if state.centrifuge.active else Action.CENTRIFUGE_START: (
+                self.indicators.button.on if state.centrifuge.active else self.indicators.button.off,
+                True,
+            ),
+            Action.CENTRIFUGE_LEVEL_CYCLE: (
+                {
+                    Level.OFF: self.indicators.levels.off,
+                    Level.LOW: self.indicators.levels.low,
+                    Level.MEDIUM: self.indicators.levels.medium,
+                    Level.HIGH: self.indicators.levels.high,
+                }[state.centrifuge.level],
+                not state.centrifuge.active,#can only be adjusted if centrifuge is currently off
+            ),
+            Action.PRESS_STOP if state.press.active else Action.PRESS_START: (
+                self.indicators.button.on if state.press.active else self.indicators.button.off,
+                True,
+            ),
+            Action.PRESS_LEVEL_CYCLE: (
+                pygame.transform.rotate(
+                    {
+                        Level.OFF: self.indicators.levels.off,
+                        Level.LOW: self.indicators.levels.low,
+                        Level.MEDIUM: self.indicators.levels.medium,
+                        Level.HIGH: self.indicators.levels.high,
+                    }[state.press.level],
+                    90,
+                ),
+                not state.press.active,
+            ),
+            Location.START: self.containers.beaker_holder,
+            Location.END: self.containers.beaker_holder,
+            Location.HEATER: self.heater.body.off,
+            Location.CENTRIFUGE: self.centrifuge.body.closed,
+            Location.PRESS: self.press.platform,
+            Location.BIN: self.bin,
+            Location.ACID: (
+                state.acid_available,
+                (
+                    self.containers.flask_holder,
+                    self.containers.acid_1,
+                    self.containers.acid_2,
+                    self.containers.acid_3,
+                ),
+            ),
+            Location.ALKALINE: (
+                state.alkaline_available,
+                (
+                    self.containers.flask_holder,
+                    self.containers.alkaline_1,
+                    self.containers.alkaline_2,
+                    self.containers.alkaline_3,
+                ),
+            ),
+            Location.POWDER: (
+                state.powder_available,
+                (
+                    self.containers.dishes,
+                    self.containers.powder_1,
+                    self.containers.powder_2,
+                    self.containers.powder_3,
+                ),
+            ),
+        }
+
+        for location, sprite_or_states in target_sprites.items():
+            if isinstance(sprite_or_states, tuple):
+                if isinstance(sprite_or_states[0], pygame.Surface):
+                    sprite, enabled = sprite_or_states
+                    if not enabled:
+                        continue
+                else:
+                    available, sprites = sprite_or_states
+                    if available <= 0:
+                        continue
+                    sprite = sprites[available]
+            else:
+                sprite = sprite_or_states
+
+            rect = self._rect_for_sprite(location, sprite)
             if rect.collidepoint(game_pos):
                 return location
         return None
@@ -349,6 +430,22 @@ class Renderer:
                     heater_window_case,
                     (positions[Location.HEATER].x+x_offset,positions[Location.HEATER].y+117)
                 )
+        
+        #interactable buttons and level selector
+        current_level = state.heater.level
+        if current_level == Level.OFF:
+            level_case = self.indicators.levels.off
+        elif current_level == Level.LOW:
+            level_case = self.indicators.levels.low
+        elif current_level == Level.MEDIUM:
+            level_case = self.indicators.levels.medium
+        elif current_level == Level.HIGH:
+            level_case = self.indicators.levels.high
+        self.game_surface.blit(
+                        level_case,
+                        (positions[Action.HEATER_LEVEL_CYCLE].x,
+                         positions[Action.HEATER_LEVEL_CYCLE].y)
+                    )
 
     def draw_centrifuge(self,state):
         if state.centrifuge.open:
@@ -360,7 +457,36 @@ class Renderer:
                 (positions[Location.CENTRIFUGE].x,positions[Location.CENTRIFUGE].y)
             )
 
+        #interactable buttons and level selector
+        current_level = state.centrifuge.level
+        if current_level == Level.OFF:
+            level_case = self.indicators.levels.off
+        elif current_level == Level.LOW:
+            level_case = self.indicators.levels.low
+        elif current_level == Level.MEDIUM:
+            level_case = self.indicators.levels.medium
+        elif current_level == Level.HIGH:
+            level_case = self.indicators.levels.high
+        self.game_surface.blit(
+                        level_case,
+                        (positions[Action.CENTRIFUGE_LEVEL_CYCLE].x,
+                         positions[Action.CENTRIFUGE_LEVEL_CYCLE].y)
+                    )
+        if state.centrifuge.active:
+            button_case = self.indicators.button.on
+        else:
+            button_case = self.indicators.button.off
+        self.game_surface.blit(
+                        button_case,
+                            (positions[Action.CENTRIFUGE_START].x,
+                            positions[Action.CENTRIFUGE_START].y)
+                    )
+
     def draw_press(self,state):
+        self.game_surface.blit(
+                                    self.press.tank,
+                                    (positions[Location.PRESS].x-70,positions[Location.PRESS].y-75)
+                                )
         self.game_surface.blit(
                                     self.press.platform,
                                     (positions[Location.PRESS].x,positions[Location.PRESS].y)
@@ -372,12 +498,32 @@ class Renderer:
                                 self.press.piston,
                                 (positions[Location.PRESS].x,positions[Location.PRESS].y+p_offset)
                             )
+        current_level = state.press.level
+        level_case = {
+            Level.OFF: self.indicators.levels.off,
+            Level.LOW: self.indicators.levels.low,
+            Level.MEDIUM: self.indicators.levels.medium,
+            Level.HIGH: self.indicators.levels.high,
+        }[current_level]
+        level_case = pygame.transform.rotate(level_case, 90)
+        self.game_surface.blit(
+            level_case,
+            (positions[Action.PRESS_LEVEL_CYCLE].x,
+             positions[Action.PRESS_LEVEL_CYCLE].y)
+        )
+        button_case = self.indicators.button.on if state.press.active else self.indicators.button.off
+        self.game_surface.blit(
+            button_case,
+            (positions[Action.PRESS_START].x,
+             positions[Action.PRESS_START].y)
+        )
+        
 
     def draw_container(self, state):
 
         location = state.mix_container.location
         #don't draw container at all if it was thrown in bin
-        if location == Location.BIN:
+        if location == Location.BIN or not(state.mix_container.visible):
             return
 
         if location not in positions:
@@ -411,6 +557,8 @@ class Renderer:
 
     def draw_mixture(self, state):
         container_mix = state.mix_container.mixture
+        if not(container_mix.visible):
+                    return
 
         materials = [
             container_mix.material_1,
@@ -421,71 +569,72 @@ class Renderer:
         # Filter out empty slots
         materials = [m for m in materials if m is not None]
 
+        if container_mix.visible:
 
-        if container_mix.current_container == Location.CONTAINER:
-            # Mask surfaces
-            masks = [ self.mixture.mask_1_beaker,self.mixture.mask_2_beaker,self.mixture.mask_3_beaker]
+            if container_mix.current_container == Location.CONTAINER:
+                # Mask surfaces
+                masks = [ self.mixture.mask_1_beaker,self.mixture.mask_2_beaker,self.mixture.mask_3_beaker]
 
-            # Position of the beaker
-            if self.drag_position is None:
-                x_loc = positions[state.mix_container.location].x + center_offsets[state.mix_container.location].x
-                y_loc = positions[state.mix_container.location].y + center_offsets[state.mix_container.location].y
+                # Position of the beaker
+                if self.drag_position is None:
+                    x_loc = positions[state.mix_container.location].x + center_offsets[state.mix_container.location].x
+                    y_loc = positions[state.mix_container.location].y + center_offsets[state.mix_container.location].y
+                else:
+                    x_loc, y_loc = self.drag_position
+
+                # Draw each material using its mask
+                for i, mat in enumerate(materials):
+                    if mat.color is None:
+                        continue
+
+                    color = COLOR_RGB[mat.color]
+
+                    # Tint mask with material color
+                    tinted = tint_mask(masks[i], color)
+                    # Blit into the container
+                    self.game_surface.blit(tinted, (x_loc, y_loc))
+
+            elif container_mix.current_container == Location.CENTRIFUGE:
+                # Mask surfaces
+                masks = [ self.mixture.mask_1_centrifuge,self.mixture.mask_2_centrifuge,self.mixture.mask_3_centrifuge]
+                # put into centrifuge
+                x_loc = positions[container_mix.current_container].x
+                y_loc = positions[container_mix.current_container].y
+                # Draw each material using its mask
+                for i, mat in enumerate(materials):
+                    if mat.color is None:
+                        continue
+
+                    color = COLOR_RGB[mat.color]
+
+                    # Tint mask with material color
+                    tinted = tint_mask(masks[i], color)
+                    # Blit into the container
+                    self.game_surface.blit(tinted, (x_loc, y_loc))
+
+            elif container_mix.current_container == Location.PRESS:
+                # Mask surfaces
+                masks = [ self.mixture.mask_1_press,self.mixture.mask_2_press,self.mixture.mask_3_press]
+                # put into press
+                x_loc = positions[container_mix.current_container].x
+                y_loc = positions[container_mix.current_container].y
+                # Draw each material using its mask
+                for i, mat in enumerate(materials):
+                    if mat.color is None:
+                        continue
+
+                    color = COLOR_RGB[mat.color]
+
+                    # Tint mask with material color
+                    tinted = tint_mask(masks[i], color)
+                    # Blit into the container
+                    self.game_surface.blit(tinted, (x_loc, y_loc))
             else:
-                x_loc, y_loc = self.drag_position
-
-            # Draw each material using its mask
-            for i, mat in enumerate(materials):
-                if mat.color is None:
-                    continue
-
-                color = COLOR_RGB[mat.color]
-
-                # Tint mask with material color
-                tinted = tint_mask(masks[i], color)
-                # Blit into the container
-                self.game_surface.blit(tinted, (x_loc, y_loc))
-
-        elif container_mix.current_container == Location.CENTRIFUGE:
-            # Mask surfaces
-            masks = [ self.mixture.mask_1_centrifuge,self.mixture.mask_2_centrifuge,self.mixture.mask_3_centrifuge]
-            # put into centrifuge
-            x_loc = positions[container_mix.current_container].x
-            y_loc = positions[container_mix.current_container].y
-            # Draw each material using its mask
-            for i, mat in enumerate(materials):
-                if mat.color is None:
-                    continue
-
-                color = COLOR_RGB[mat.color]
-
-                # Tint mask with material color
-                tinted = tint_mask(masks[i], color)
-                # Blit into the container
-                self.game_surface.blit(tinted, (x_loc, y_loc))
-
-        elif container_mix.current_container == Location.PRESS:
-            # Mask surfaces
-            masks = [ self.mixture.mask_1_press,self.mixture.mask_2_press,self.mixture.mask_3_press]
-            # put into press
-            x_loc = positions[container_mix.current_container].x
-            y_loc = positions[container_mix.current_container].y
-            # Draw each material using its mask
-            for i, mat in enumerate(materials):
-                if mat.color is None:
-                    continue
-
-                color = COLOR_RGB[mat.color]
-
-                # Tint mask with material color
-                tinted = tint_mask(masks[i], color)
-                # Blit into the container
-                self.game_surface.blit(tinted, (x_loc, y_loc))
-        else:
-            print("No location")
+                print("No location")
 
     def draw_status(self, state):
 
-        x = 30
+        x = 800
         y = 30
 
         self.draw_text( f"Time: {state.time_remaining:.1f}",x, y)
@@ -551,10 +700,10 @@ class Renderer:
         self.press.indicator =  scale_by_factor(load_image(f"press/tank.png", None),GLOBAL_FACTOR)
         self.press.valve_0 =  scale_by_factor(load_image(f"press/valve_0.png", None),GLOBAL_FACTOR)
         self.press.valve_1 =  scale_by_factor(load_image(f"press/valve_1.png", None),GLOBAL_FACTOR)
-        self.press.needle_off =  scale_by_factor(load_image(f"press/pressure_needle_off.png", None),GLOBAL_FACTOR)
-        self.press.needle_low =  scale_by_factor(load_image(f"press/pressure_needle_low.png", None),GLOBAL_FACTOR)
-        self.press.needle_medium =  scale_by_factor(load_image(f"press/pressure_needle_medium.png", None),GLOBAL_FACTOR)
-        self.press.needle_high =  scale_by_factor(load_image(f"press/pressure_needle_high.png", None),GLOBAL_FACTOR)
+        self.press.needle.off =  scale_by_factor(load_image(f"press/pressure_needle_off.png", None),GLOBAL_FACTOR)
+        self.press.needle.low =  scale_by_factor(load_image(f"press/pressure_needle_low.png", None),GLOBAL_FACTOR)
+        self.press.needle.medium =  scale_by_factor(load_image(f"press/pressure_needle_medium.png", None),GLOBAL_FACTOR)
+        self.press.needle.high =  scale_by_factor(load_image(f"press/pressure_needle_high.png", None),GLOBAL_FACTOR)
         self.press.platform =  scale_by_factor(load_image(f"press/press_plate.png", None),GLOBAL_FACTOR)
         self.press.piston =  scale_by_factor(load_image(f"press/piston.png", None),GLOBAL_FACTOR)
 
@@ -570,10 +719,10 @@ class Renderer:
         self.indicators.arrow_cw_on =  scale_by_factor(load_image(f"indicators/arrow_clockwise_on.png", None),GLOBAL_FACTOR)
         self.indicators.arrow_ccw_off =  scale_by_factor(load_image(f"indicators/arrow_counterclockwise_off.png", None),GLOBAL_FACTOR)
         self.indicators.arrow_ccw_on =  scale_by_factor(load_image(f"indicators/arrow_counterclockwise_on.png", None),GLOBAL_FACTOR)
-        self.indicators.levels_off =  scale_by_factor(load_image(f"indicators/levels_off.png", None),GLOBAL_FACTOR)
-        self.indicators.levels_low =  scale_by_factor(load_image(f"indicators/levels_low.png", None),GLOBAL_FACTOR)
-        self.indicators.levels_medium =  scale_by_factor(load_image(f"indicators/levels_medium.png", None),GLOBAL_FACTOR)
-        self.indicators.levels_high =  scale_by_factor(load_image(f"indicators/levels_high.png", None),GLOBAL_FACTOR)
+        self.indicators.levels.off =  scale_by_factor(load_image(f"indicators/levels_off.png", None),GLOBAL_FACTOR)
+        self.indicators.levels.low =  scale_by_factor(load_image(f"indicators/levels_low.png", None),GLOBAL_FACTOR)
+        self.indicators.levels.medium =  scale_by_factor(load_image(f"indicators/levels_medium.png", None),GLOBAL_FACTOR)
+        self.indicators.levels.high =  scale_by_factor(load_image(f"indicators/levels_high.png", None),GLOBAL_FACTOR)
 
         self.tools.toolbox =  scale_by_factor(load_image(f"tools/toolbox.png", None),GLOBAL_FACTOR)
 
