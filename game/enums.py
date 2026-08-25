@@ -52,6 +52,8 @@ class Location(Enum):
     ALKALINE = 8
     POWDER = 9
     CONTAINER = 10
+    BOX_1 = 11
+    BOX_2 = 12
 
 class Action(Enum):
     ADD_ACID = auto()

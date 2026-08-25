@@ -59,13 +59,15 @@ COLOR_RGB = {
     None: None
 }
 positions = {
-    Location.CENTRIFUGE: {"x": 400, "y": 160},
-    Location.HEATER:     {"x": 380, "y": 350},
-    Location.PRESS:      {"x": 710, "y": 375},
+    Location.CENTRIFUGE: {"x": 400, "y": 120},
+    Location.HEATER:     {"x": 380, "y": 310},
+    Location.PRESS:      {"x": 710, "y": 335},
     Location.BIN:        {"x": 250, "y": 520},
     Location.SHELF:      {"x": 0, "y": 120},
     Location.START:      {"x": 250, "y": 400},
     Location.END:        {"x": 900, "y": 400},
+    Location.BOX_1:        {"x":370, "y": 525},
+    Location.BOX_2:        {"x":650, "y": 525},
 }
 center_offsets = defaultdict(lambda: {"x":0,"y":0},{
     Location.CENTRIFUGE: {"x": 150, "y": 150},
@@ -89,8 +91,14 @@ rel_centrifuge = positions[Location.CENTRIFUGE]
 positions[Action.CENTRIFUGE_START] = {"x": rel_centrifuge.x+40, "y": rel_centrifuge.y+180}
 positions[Action.CENTRIFUGE_STOP] = positions[Action.CENTRIFUGE_START]
 positions[Action.CENTRIFUGE_LEVEL_CYCLE] = {"x": rel_centrifuge.x+70, "y": rel_centrifuge.y+173}
-rel_centrifuge = positions[Location.HEATER]
-positions[Action.HEATER_LEVEL_CYCLE] = {"x": rel_centrifuge.x+200, "y": rel_centrifuge.y+90}
+positions[Action.CENTRIFUGE_OPEN] = {"x": rel_centrifuge.x+120, "y": rel_centrifuge.y+180}
+positions[Action.CENTRIFUGE_CLOSE] = positions[Action.CENTRIFUGE_OPEN]
+positions[Action.CENTRIFUGE_FILL] = {"x": rel_centrifuge.x+120, "y": rel_centrifuge.y+215}
+positions[Action.CENTRIFUGE_EMPTY] = positions[Action.CENTRIFUGE_FILL]
+rel_heater = positions[Location.HEATER]
+positions[Action.HEATER_LEVEL_CYCLE] = {"x": rel_heater.x+200, "y": rel_heater.y+90}
+positions[Action.HEATER_OPEN] = {"x": rel_heater.x+195, "y": rel_heater.y+160}
+positions[Action.HEATER_CLOSE] = positions[Action.HEATER_OPEN]
 rel_press = positions[Location.PRESS]
 positions[Action.PRESS_START] = {"x": rel_press.x+50, "y": rel_press.y+200}
 positions[Action.PRESS_STOP] = positions[Action.PRESS_START]
@@ -128,6 +136,10 @@ class Renderer:
         self.debug_grid_enabled = False
         self.debug_grid_step = 50
         self.drag_position = None
+        self.opening_button = pygame.Surface((30, 30))
+        self.opening_button.fill((40, 120, 220))
+        self.transfer_button = pygame.Surface((30, 30))
+        self.transfer_button.fill((230, 140, 30))
 
         self.heater = AutoNamespace()
         self.centrifuge = AutoNamespace()
@@ -196,6 +208,10 @@ class Renderer:
 
     def target_at(self, game_pos, state):
         target_sprites = {
+            Action.HEATER_CLOSE if state.heater.open else Action.HEATER_OPEN: (
+                self.opening_button,
+                True,
+            ),
             Action.HEATER_LEVEL_CYCLE: (
                 {
                     Level.OFF: self.indicators.levels.off,
@@ -207,6 +223,16 @@ class Renderer:
             ),
             Action.CENTRIFUGE_STOP if state.centrifuge.active else Action.CENTRIFUGE_START: (
                 self.indicators.button.on if state.centrifuge.active else self.indicators.button.off,
+                True,
+            ),
+            Action.CENTRIFUGE_CLOSE if state.centrifuge.open else Action.CENTRIFUGE_OPEN: (
+                self.opening_button,
+                True,
+            ),
+            Action.CENTRIFUGE_EMPTY
+            if state.mix_container.mixture.current_container == Location.CENTRIFUGE
+            else Action.CENTRIFUGE_FILL: (
+                self.transfer_button,
                 True,
             ),
             Action.CENTRIFUGE_LEVEL_CYCLE: (
@@ -327,6 +353,14 @@ class Renderer:
                     self.shelf,
                     (positions[Location.SHELF].x,positions[Location.SHELF].y)
                 )
+        self.game_surface.blit(
+                    self.box_1,
+                    (positions[Location.BOX_1].x,positions[Location.BOX_1].y)
+                )
+        self.game_surface.blit(
+                    self.box_1,
+                    (positions[Location.BOX_2].x,positions[Location.BOX_2].y)
+                )
 
     def draw_resources(self,state):
         #flasks
@@ -430,6 +464,13 @@ class Renderer:
                     heater_window_case,
                     (positions[Location.HEATER].x+x_offset,positions[Location.HEATER].y+117)
                 )
+        heater_open_action = (
+            Action.HEATER_OPEN if not state.heater.open else Action.HEATER_CLOSE
+        )
+        self.game_surface.blit(
+            self.opening_button,
+            (positions[heater_open_action].x, positions[heater_open_action].y)
+        )
         
         #interactable buttons and level selector
         current_level = state.heater.level
@@ -481,6 +522,26 @@ class Renderer:
                             (positions[Action.CENTRIFUGE_START].x,
                             positions[Action.CENTRIFUGE_START].y)
                     )
+        centrifuge_open_action = (
+            Action.CENTRIFUGE_OPEN
+            if not state.centrifuge.open
+            else Action.CENTRIFUGE_CLOSE
+        )
+        self.game_surface.blit(
+            self.opening_button,
+            (positions[centrifuge_open_action].x,
+             positions[centrifuge_open_action].y)
+        )
+        centrifuge_transfer_action = (
+            Action.CENTRIFUGE_EMPTY
+            if state.mix_container.mixture.current_container == Location.CENTRIFUGE
+            else Action.CENTRIFUGE_FILL
+        )
+        self.game_surface.blit(
+            self.transfer_button,
+            (positions[centrifuge_transfer_action].x,
+             positions[centrifuge_transfer_action].y)
+        )
 
     def draw_press(self,state):
         self.game_surface.blit(
@@ -647,11 +708,16 @@ class Renderer:
 
         self.draw_text( f"Money: {state.money_remaining}", x, y + 120 )
 
+        self.draw_text( f"(Heat stability: {state.mix_container.heat_stability.name})", x, y + 150 )
+
+        self.draw_text( f"(Mixing stability: {state.mix_container.centrifuge_stability.name})", x, y + 180 )
+
+
     def load_sprites(self):
 
         self.background = scale_by_factor(load_image(f"background/walls_floor_0.png",None),GLOBAL_FACTOR+0.15)
         self.shelf = scale_by_factor(load_image(f"background/shelf.png",None),GLOBAL_FACTOR)
-
+        self.box_1 = scale_by_factor(load_image(f"background/box_1.png",None),GLOBAL_FACTOR)
         self.heater.body.off = scale_by_factor(load_image(f"heater/body_off.png", None),GLOBAL_FACTOR)
         self.heater.body.low = scale_by_factor(load_image(f"heater/body_low.png", None),GLOBAL_FACTOR)
         self.heater.body.medium = scale_by_factor(load_image(f"heater/body_medium.png", None),GLOBAL_FACTOR)

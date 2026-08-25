@@ -84,7 +84,7 @@ class Mixture:
 class Container:
   type: ContainerType = ContainerType.BEAKER
   heat_stability: Level = random.choice([Level.MEDIUM,Level.HIGH,Level.ABOVE_ALL])
-  centrifuge_stability: Level= random.choice(list(Level))
+  centrifuge_stability: Level= random.choice([Level.MEDIUM,Level.HIGH,Level.ABOVE_ALL])
   compression_time_max: float= 1+random.random()*10
   compression_time_start: float = 0
   mixture: Mixture = field(default_factory=Mixture)
