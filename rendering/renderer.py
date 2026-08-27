@@ -61,13 +61,15 @@ COLOR_RGB = {
 positions = {
     Location.CENTRIFUGE: {"x": 400, "y": 120},
     Location.HEATER:     {"x": 380, "y": 310},
-    Location.PRESS:      {"x": 710, "y": 335},
-    Location.BIN:        {"x": 250, "y": 520},
+    Location.PRESS:      {"x": 690, "y": 335},
+    Location.BIN:        {"x": 250, "y": 540},
     Location.SHELF:      {"x": 0, "y": 120},
     Location.START:      {"x": 250, "y": 400},
     Location.END:        {"x": 900, "y": 400},
     Location.BOX_1:        {"x":370, "y": 525},
     Location.BOX_2:        {"x":650, "y": 525},
+    Location.LITTLE_SHELF_1:        {"x":240, "y": 480},
+    Location.LITTLE_SHELF_2:        {"x":890, "y": 480},
 }
 center_offsets = defaultdict(lambda: {"x":0,"y":0},{
     Location.CENTRIFUGE: {"x": 150, "y": 150},
@@ -360,6 +362,14 @@ class Renderer:
         self.game_surface.blit(
                     self.box_1,
                     (positions[Location.BOX_2].x,positions[Location.BOX_2].y)
+                )
+        self.game_surface.blit(
+                    self.little_shelf,
+                    (positions[Location.LITTLE_SHELF_1].x,positions[Location.LITTLE_SHELF_1].y)
+                )
+        self.game_surface.blit(
+                    self.little_shelf,
+                    (positions[Location.LITTLE_SHELF_2].x,positions[Location.LITTLE_SHELF_2].y)
                 )
 
     def draw_resources(self,state):
@@ -695,7 +705,7 @@ class Renderer:
 
     def draw_status(self, state):
 
-        x = 800
+        x = 780
         y = 30
 
         self.draw_text( f"Time: {state.time_remaining:.1f}",x, y)
@@ -717,6 +727,7 @@ class Renderer:
 
         self.background = scale_by_factor(load_image(f"background/walls_floor_0.png",None),GLOBAL_FACTOR+0.15)
         self.shelf = scale_by_factor(load_image(f"background/shelf.png",None),GLOBAL_FACTOR)
+        self.little_shelf = scale_by_factor(load_image(f"background/little_shelf.png",None),GLOBAL_FACTOR)
         self.box_1 = scale_by_factor(load_image(f"background/box_1.png",None),GLOBAL_FACTOR)
         self.heater.body.off = scale_by_factor(load_image(f"heater/body_off.png", None),GLOBAL_FACTOR)
         self.heater.body.low = scale_by_factor(load_image(f"heater/body_low.png", None),GLOBAL_FACTOR)
@@ -745,7 +756,6 @@ class Renderer:
         self.containers.powder_2 =  scale_by_factor(load_image(f"containers/powder_2.png", None),GLOBAL_FACTOR)
         self.containers.powder_3 =  scale_by_factor(load_image(f"containers/powder_3.png", None),GLOBAL_FACTOR)
         self.bin = scale_by_factor(load_image(f"containers/bin.png",None),GLOBAL_FACTOR)
-    
 
         self.fuse_box.fuses_closed =  scale_by_factor(load_image(f"fuse_box/body_closed_fuses.png", None),GLOBAL_FACTOR)
         self.fuse_box.fuses_open =  scale_by_factor(load_image(f"fuse_box/body_open_fuses.png", None),GLOBAL_FACTOR)

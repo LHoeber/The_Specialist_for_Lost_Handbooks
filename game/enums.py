@@ -54,6 +54,8 @@ class Location(Enum):
     CONTAINER = 10
     BOX_1 = 11
     BOX_2 = 12
+    LITTLE_SHELF_1 = 13
+    LITTLE_SHELF_2 = 14
 
 class Action(Enum):
     ADD_ACID = auto()
