@@ -161,11 +161,11 @@ class Renderer:
         self.game_surface.fill(COLOR_RGB[Color.WHITE])
 
         self.draw_background(state)
+        self.draw_forefront(state)
         self.draw_machine(state)
         self.draw_container(state)
         self.draw_mixture(state)
         self.draw_resources(state)
-        self.draw_forefront(state)
         self.draw_status(state)
 
         if state.status == GameStatus.GAMEOVER:

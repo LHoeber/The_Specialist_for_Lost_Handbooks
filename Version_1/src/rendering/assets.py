@@ -6,6 +6,7 @@ the Renderer (which sets up the display) before anything that calls
 load_image().
 """
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import pygame
@@ -15,8 +16,21 @@ from environment.wall_layouts import InteractableType, ModuleType
 ASSET_DIR = Path(__file__).resolve().parent.parent.parent / "assets"
 
 
-def load_image(relative_path):
-    return pygame.image.load(ASSET_DIR / relative_path).convert_alpha()
+@dataclass(frozen=True)
+class Sprite:
+    """A loaded image plus whether it was drawn with the top-down-perspective
+    convention (a 6px top-face strip above the front face -- see
+    config.TOP_FACE_OVERHANG). Set explicitly at load time rather than
+    guessed from pixel size, since a flat icon could coincidentally be sized
+    the same as a headered one."""
+
+    surface: pygame.Surface
+    has_overhang: bool = False
+
+
+def load_image(relative_path, has_overhang=False):
+    surface = pygame.image.load(ASSET_DIR / relative_path).convert_alpha()
+    return Sprite(surface, has_overhang)
 
 
 # One sprite list per module type, in back-to-front draw order. Most modules
@@ -46,6 +60,8 @@ MODULE_SPRITES = {
     ModuleType.BIN: ["devices/bin.png"],
     ModuleType.SHELF: ["furniture/shelf_0.png"],
     ModuleType.PIPES_WITH_VALVE: ["devices/pipes_down.png"],
+    ModuleType.PRESSURE_TANK_PIPES: ["devices/pressure_tank_big_pipes.png"],
+    ModuleType.WIDE_PIPE: ["devices/wide_pipe.png"],
     ModuleType.TOOLBOX: ["devices/toolbox.png"],
     ModuleType.BEAKER_HOLDER: ["containers/beaker_holder.png"],
     ModuleType.SINK: ["devices/sink.png"],
@@ -53,7 +69,8 @@ MODULE_SPRITES = {
     ModuleType.COMPOSITION_SCANNER: ["devices/analyzer.png"],
     ModuleType.CONTROL_PANEL: ["devices/control_panel_off.png"],
     ModuleType.DOOR: ["furniture/door.png"],
-    ModuleType.WORKBENCH: ["furniture/counter_closed.png"],
+    ModuleType.WORKBENCH: ["furniture/counter.png"],
+    ModuleType.CLOCK: ["devices/clock.png"],
 }
 
 # One default sprite per interactable type. POWER_PLUG is intentionally
@@ -72,4 +89,12 @@ INTERACTABLE_SPRITES = {
 BACKGROUND_SPRITES = {
     "wall_tile": "background/wall_tiles.png",
     "floor_tile": "background/floor_plate.png",
+    "icon": "background/icon.png",
+}
+
+# A Workbench's door has two states rather than one fixed sprite, so it
+# doesn't fit INTERACTABLE_SPRITES above -- see objects.CabinetDoor.
+CABINET_DOOR_SPRITES = {
+    "closed": "furniture/counter_doors_closed.png",
+    "open": "furniture/counter_doors_opened.png",
 }

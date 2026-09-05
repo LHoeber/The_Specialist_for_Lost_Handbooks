@@ -28,7 +28,7 @@ def main():
                     ui.handle_event(event, env.state)
 
             renderer.render(env.state)
-            clock.tick(FPS)
+            clock.tick(FPS)#limits frame rate to max FPS frames per second
     finally:
         pygame.quit()
 

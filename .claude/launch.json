@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "repo-static-server",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-c",
+        "import http.server,socketserver,os; port=int(os.environ.get('PORT','8000')); socketserver.TCPServer.allow_reuse_address=True; socketserver.TCPServer(('',port), http.server.SimpleHTTPRequestHandler).serve_forever()"
+      ],
+      "port": 8000,
+      "autoPort": true
+    }
+  ]
+}

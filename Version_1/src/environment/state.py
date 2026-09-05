@@ -1,45 +1,33 @@
-"""Room state: builds the four walls' modules and interactables once at
-startup (so module state can persist across visits once modules have real
-behavior) and tracks which wall is currently being viewed."""
+"""Room state: builds the four walls' modules once at startup (so module
+state can persist across visits once modules have real behavior) and tracks
+which wall is currently being viewed."""
 
-from environment.enums import Direction, InteractableType
+from environment.enums import Direction
 from environment.objects import INTERACTABLE_CLASSES, MODULE_CLASSES
 from environment.wall_layouts import ROOM_INTERACTABLES, WALLS
 
 
 class Wall:
-    """One wall's live modules and interactables, built from its
-    wall_layouts.py template."""
+    """One wall's live modules, built from its wall_layouts.py device list.
+    Each module owns its own interactables (see objects.ModuleBase); this
+    just flattens them for rendering/hit-testing."""
 
-    def __init__(self, wall_index, devices, interactables):
+    def __init__(self, wall_index, devices):
+        self.wall_index = wall_index
         self.modules = [
-            MODULE_CLASSES[device.type](wall_index, device.anchor)
+            MODULE_CLASSES[device.type](wall_index, device.anchor, **device.kwargs)
             for device in devices
         ]
-        self.interactables = []
-        for item in interactables:
-            parent = (
-                self.modules[item.parent_index]
-                if item.parent_index is not None
-                else None
-            )
-            # The Compressor sits inside the Workbench and is only meant to
-            # be visible once the Workbench can be opened -- that mechanic
-            # isn't built yet, so it stays hidden for now.
-            visible = item.type != InteractableType.COMPRESSOR
-            self.interactables.append(
-                INTERACTABLE_CLASSES[item.type](item.offset, parent=parent, visible=visible)
-            )
+        self.interactables = [
+            interactable for module in self.modules for interactable in module.interactables
+        ]
 
 
 class RoomState:
     """All four walls plus the currently-viewed wall index."""
 
     def __init__(self):
-        self.walls = [
-            Wall(index, devices, interactables)
-            for index, (devices, interactables) in enumerate(WALLS)
-        ]
+        self.walls = [Wall(index, devices) for index, devices in enumerate(WALLS)]
         # Movement arrows are room-level and identical on every wall, so
         # they're built once here rather than per-wall.
         self.room_interactables = [

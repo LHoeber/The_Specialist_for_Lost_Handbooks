@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Specialist for Lost Handbooks</title>
+<link rel="icon" href="../Version_1/assets/background/icon.png">
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background: black;
+    width: 100%;
+    height: 100%;
+  }
+  #game-canvas {
+    display: block;
+  }
+</style>
+</head>
+<body>
+<canvas id="game-canvas"></canvas>
+
+<!-- Classic (non-module) scripts, loaded in dependency order, so this page
+     runs by opening the file directly (file://) with no local server --
+     ES module import/export is blocked by browsers over file://. Each file
+     attaches its exports to window.Game.<Name> instead. -->
+<script src="src/config.js"></script>
+<script src="src/environment/wall_layouts.js"></script>
+<script src="src/environment/enums.js"></script>
+<script src="src/rendering/assets.js"></script>
+<script src="src/environment/objects.js"></script>
+<script src="src/environment/state.js"></script>
+<script src="src/environment/environment.js"></script>
+<script src="src/environment/rules.js"></script>
+<script src="src/rendering/renderer.js"></script>
+<script src="src/rendering/ui.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
