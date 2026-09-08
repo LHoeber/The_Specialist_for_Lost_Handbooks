@@ -144,6 +144,7 @@ Game.Assets = (function () {
     [InteractableType.MOVE_ARROW_RIGHT]: "indicators/move_right.png",
     [InteractableType.LEVEL_INDICATOR]: "indicators/levels_off.png",
     [InteractableType.COMPRESSOR]: "devices/counter_compressor.png",
+    [InteractableType.BEAKER]: ["containers/beaker_back.png", "containers/beaker_front.png"],
   };
 
   const BACKGROUND_SPRITES = {

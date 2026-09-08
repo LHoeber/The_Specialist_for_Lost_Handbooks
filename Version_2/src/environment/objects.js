@@ -17,47 +17,59 @@ Game.Objects = (function () {
   const { MODULE_SPRITES, INTERACTABLE_SPRITES, CABINET_DOOR_SPRITES, loadImage } = Game.Assets;
 
   /**
-   * Shared behavior for every machine module / furniture piece.
+   * Shared sprite-owning behavior for anything drawn as one or more layered
+   * (optionally animated) sprites at some [row, column] position -- both
+   * machine modules and interactables are exactly this, so both extend it
+   * instead of each having their own copy of this loading/sizing logic.
    *
-   * Size is inferred from the module's own (first) sprite: sprites use a
-   * top-down perspective where a module n cells tall has a sprite
-   * TILE_SIZE px wide by (38 + (n-1)*32) px tall -- see Config.TOP_FACE_OVERHANG.
+   * `spriteNames` entries are either a plain path string, or an animated
+   * sprite-sheet spec: {path, frames, channels, seconds, frame_width,
+   * frame_height} (see Assets.loadImage / Sprite / Renderer._currentFrame).
+   * `spriteHasOverhang` is the default top-down-perspective flag (see
+   * Config.TOP_FACE_OVERHANG) applied to every entry loaded for this class;
+   * `ModuleBase` defaults it to true (every module sprite uses that
+   * convention), `InteractableBase` defaults it to false (most interactable
+   * icons are flat), and either can be overridden per concrete subclass.
+   *
+   * Size is inferred from the first sprite layer, same convention
+   * throughout: TILE_SIZE px wide by (38 + (n-1)*32) px tall for an n-cell
+   * module, minus the overhang strip if that layer has one.
    */
-  class ModuleBase {
-    static moduleType = null;
+  class SpriteOwner {
     static spriteNames = [];
+    static spriteHasOverhang = false;
 
-    constructor(wallIndex, anchor) {
-      this.wallIndex = wallIndex;
-      this.anchor = anchor; // [row, column] of the top-left occupied cell
-      // All module sprites use the top-down-perspective convention.
-      // now possible with animations
-      this.sprites = this.constructor.spriteNames.map(entry => {
-        if (typeof entry === "string") {
-          // simple case -- every module sprite uses the top-down-perspective
-          // convention (see class doc comment), hence hasOverhang: true.
-          return loadImage(entry, true);
-        }
+    constructor() {
+      this.setSprites(
+        this.constructor.spriteNames.map((entry) => {
+          if (typeof entry === "string") {
+            return loadImage(entry, this.constructor.spriteHasOverhang);
+          }
+          // Animated sprite-sheet entry.
+          return loadImage(
+            entry.path,
+            this.constructor.spriteHasOverhang,
+            entry.frames,
+            entry.channels,
+            entry.seconds,
+            entry.frame_width,
+            entry.frame_height,
+          );
+        })
+      );
+    }
 
-        // extended case (animated sprite sheet)
-        return loadImage(
-          entry.path,
-          true,
-          entry.frames,
-          entry.channels,
-          entry.seconds,
-          entry.frame_width,
-          entry.frame_height,
-        );
-      });
-
-      // Relative [row, column] offset of each sprite from the anchor cell;
-      // all layers share the same anchor by default (e.g. Mixer's back/
-      // front pair), but a module could offset one later if needed.
-      this.spriteOffsets = this.sprites.map(() => [0.0, 0.0]);
-      // Interactables this module owns (buttons, dials, ...), positioned
-      // relative to its own anchor. Empty unless a subclass adds its own.
-      this.interactables = [];
+    // Swaps which sprite(s) this owner draws (e.g. CabinetDoor's open vs.
+    // closed state) while keeping `spriteOffsets` the same length as
+    // `sprites` -- go through this rather than assigning `this.sprites`
+    // directly, so the two arrays can't drift out of sync.
+    setSprites(sprites) {
+      this.sprites = sprites;
+      // Relative [row, column] offset of each sprite layer from this
+      // owner's own anchor; all layers share the anchor by default (e.g.
+      // Mixer's or Beaker's back/front pair), but a layer could be offset
+      // later if needed.
+      this.spriteOffsets = sprites.map(() => [0.0, 0.0]);
     }
 
     get widthCells() {
@@ -65,7 +77,23 @@ Game.Objects = (function () {
     }
 
     get heightCells() {
-      return (this.sprites[0].height - TOP_FACE_OVERHANG) / TILE_SIZE;
+      const sprite = this.sprites[0];
+      return (sprite.height - (sprite.hasOverhang ? TOP_FACE_OVERHANG : 0)) / TILE_SIZE;
+    }
+  }
+
+  /** Shared behavior for every machine module / furniture piece. */
+  class ModuleBase extends SpriteOwner {
+    static moduleType = null;
+    static spriteHasOverhang = true; // every module sprite uses the top-down-perspective convention
+
+    constructor(wallIndex, anchor) {
+      super();
+      this.wallIndex = wallIndex;
+      this.anchor = anchor; // [row, column] of the top-left occupied cell
+      // Interactables this module owns (buttons, dials, ...), positioned
+      // relative to its own anchor. Empty unless a subclass adds its own.
+      this.interactables = [];
     }
   }
 
@@ -289,22 +317,24 @@ Game.Objects = (function () {
 
   /**
    * Shared behavior for a UI element attached to a module (or, for the
-   * movement arrows, standalone at the room level).
+   * movement arrows, standalone at the room level). `spriteNames` works
+   * exactly as it does for modules (see SpriteOwner) -- most interactables
+   * are one flat icon (a 1-element array), but nothing stops one from being
+   * layered (Beaker's back/front pair) or animated, the same mechanism
+   * either way.
    */
-  class InteractableBase {
+  class InteractableBase extends SpriteOwner {
     static interactableType = null;
-    static spriteName = "";
     // Most interactables are flat icons with no top-face strip. Override to
-    // true on a subclass whose spriteName file *does* use that convention
-    // (see CabinetDoor for a hand-loaded example, and Compressor below).
+    // true on a subclass whose sprite(s) *do* use that convention (e.g.
+    // Compressor, Beaker, CabinetDoor below).
     static spriteHasOverhang = false;
 
     constructor(offset, parent = null, visible = true) {
+      super();
       this.offset = offset; // [row, column] relative to the parent module's anchor
       this.parent = parent; // a ModuleBase instance, or null for room-level
       this.visible = visible;
-      const ctor = this.constructor;
-      this.sprite = ctor.spriteName ? loadImage(ctor.spriteName, ctor.spriteHasOverhang) : null;
     }
 
     // eslint-disable-next-line no-unused-vars
@@ -317,49 +347,52 @@ Game.Objects = (function () {
       const parentAnchor = this.parent !== null ? this.parent.anchor : [0, 0];
       return [parentAnchor[0] + this.offset[0], parentAnchor[1] + this.offset[1]];
     }
-
-    get widthCells() {
-      return this.sprite ? this.sprite.width / TILE_SIZE : 0;
-    }
-
-    get heightCells() {
-      return this.sprite ? this.sprite.height / TILE_SIZE : 0;
-    }
   }
 
   class Button extends InteractableBase {
     static interactableType = InteractableType.BUTTON;
-    static spriteName = INTERACTABLE_SPRITES[InteractableType.BUTTON];
+    static spriteNames = [INTERACTABLE_SPRITES[InteractableType.BUTTON]];
   }
 
   class Lever extends InteractableBase {
     static interactableType = InteractableType.LEVER;
-    static spriteName = INTERACTABLE_SPRITES[InteractableType.LEVER];
+    static spriteNames = [INTERACTABLE_SPRITES[InteractableType.LEVER]];
   }
 
   class Dial extends InteractableBase {
     static interactableType = InteractableType.DIAL;
-    static spriteName = INTERACTABLE_SPRITES[InteractableType.DIAL];
+    static spriteNames = [INTERACTABLE_SPRITES[InteractableType.DIAL]];
   }
 
   class LevelIndicator extends InteractableBase {
     static interactableType = InteractableType.LEVEL_INDICATOR;
-    static spriteName = INTERACTABLE_SPRITES[InteractableType.LEVEL_INDICATOR];
+    static spriteNames = [INTERACTABLE_SPRITES[InteractableType.LEVEL_INDICATOR]];
   }
 
   class Compressor extends InteractableBase {
     static interactableType = InteractableType.COMPRESSOR;
-    static spriteName = INTERACTABLE_SPRITES[InteractableType.COMPRESSOR];
+    static spriteNames = [INTERACTABLE_SPRITES[InteractableType.COMPRESSOR]];
     static spriteHasOverhang = true; // counter_compressor.png uses the perspective convention
+  }
+
+  class Beaker extends InteractableBase {
+    static interactableType = InteractableType.BEAKER;
+    static spriteNames = INTERACTABLE_SPRITES[InteractableType.BEAKER]; // [back, front]
+    static spriteHasOverhang = true; // beaker sprites use the perspective convention
   }
 
   /**
    * A container's own door/hatch: toggles open/closed and reveals whichever
    * content interactables its owning module attaches afterward via
-   * `.contents` (see Workbench).
+   * `.contents` (see Workbench). Open/closed are alternative single-sprite
+   * states (only one shown at a time), not layers drawn together, which is
+   * why this swaps the whole `sprites` array on click rather than using
+   * `spriteNames` -- a genuinely different case from Beaker's simultaneous
+   * back/front layers, not a parallel implementation of the same thing.
    */
   class CabinetDoor extends InteractableBase {
     static interactableType = InteractableType.CABINET_DOOR;
+    static spriteHasOverhang = true;
 
     constructor(offset, parent = null) {
       super(offset, parent, true);
@@ -367,12 +400,12 @@ Game.Objects = (function () {
       this.contents = []; // assigned by the owning module after construction
       this._closedSprite = loadImage(CABINET_DOOR_SPRITES.closed, true);
       this._openSprite = loadImage(CABINET_DOOR_SPRITES.open, true);
-      this.sprite = this._closedSprite;
+      this.setSprites([this._closedSprite]);
     }
 
     onClick(_roomState) {
       this.open = !this.open;
-      this.sprite = this.open ? this._openSprite : this._closedSprite;
+      this.setSprites([this.open ? this._openSprite : this._closedSprite]);
       for (const item of this.contents) {
         item.visible = this.open;
       }
@@ -385,12 +418,12 @@ Game.Objects = (function () {
    */
   class PowerPlug extends InteractableBase {
     static interactableType = InteractableType.POWER_PLUG;
-    static spriteName = "";
+    static spriteNames = [];
   }
 
   class MoveArrowLeft extends InteractableBase {
     static interactableType = InteractableType.MOVE_ARROW_LEFT;
-    static spriteName = INTERACTABLE_SPRITES[InteractableType.MOVE_ARROW_LEFT];
+    static spriteNames = [INTERACTABLE_SPRITES[InteractableType.MOVE_ARROW_LEFT]];
 
     onClick(roomState) {
       roomState.rotate(Direction.LEFT);
@@ -399,7 +432,7 @@ Game.Objects = (function () {
 
   class MoveArrowRight extends InteractableBase {
     static interactableType = InteractableType.MOVE_ARROW_RIGHT;
-    static spriteName = INTERACTABLE_SPRITES[InteractableType.MOVE_ARROW_RIGHT];
+    static spriteNames = [INTERACTABLE_SPRITES[InteractableType.MOVE_ARROW_RIGHT]];
 
     onClick(roomState) {
       roomState.rotate(Direction.RIGHT);
@@ -414,6 +447,7 @@ Game.Objects = (function () {
     [InteractableType.COMPRESSOR]: Compressor,
     [InteractableType.POWER_PLUG]: PowerPlug,
     [InteractableType.CABINET_DOOR]: CabinetDoor,
+    [InteractableType.BEAKER]: Beaker,
     [InteractableType.MOVE_ARROW_LEFT]: MoveArrowLeft,
     [InteractableType.MOVE_ARROW_RIGHT]: MoveArrowRight,
   };
@@ -427,6 +461,7 @@ Game.Objects = (function () {
     Dial,
     LevelIndicator,
     Compressor,
+    Beaker,
     CabinetDoor,
     PowerPlug,
     MoveArrowLeft,

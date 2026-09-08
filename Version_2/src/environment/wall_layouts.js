@@ -78,6 +78,7 @@ Game.WallLayouts = (function () {
     POWER_PLUG: "POWER_PLUG", // wall 2 -- undocumented, verify
     COMPRESSOR: "COMPRESSOR", // a possible Workbench content -- undocumented, verify
     CABINET_DOOR: "CABINET_DOOR", // a Workbench's own door; see Objects.Workbench/CabinetDoor
+    BEAKER: "BEAKER",
   });
 
   class PlacedDevice {
@@ -110,7 +111,9 @@ Game.WallLayouts = (function () {
     new PlacedDevice(ModuleType.DOOR, [1, 2]), // spans down into row 2
     new PlacedDevice(ModuleType.BEAKER_HOLDER, [1, 3]),
     new PlacedDevice(ModuleType.TOOLBOX, [2, 0]),
-    new PlacedDevice(ModuleType.WORKBENCH, [2, 3]),
+    new PlacedDevice(ModuleType.WORKBENCH, [2, 3], {
+      contents: [[InteractableType.BEAKER, [0.0, 0.0]]],
+    }),
   ];
 
   // --- Wall 1 (diagram wall 2) --------------------------------------------

@@ -117,24 +117,33 @@ Game.Renderer = (function () {
       }
     }
 
+    // Draws every sprite layer of one SpriteOwner (a module or an
+    // interactable -- both have the same `sprites`/`spriteOffsets`/`anchor`
+    // shape, see Objects.SpriteOwner) at its anchor plus each layer's own
+    // offset. Shared by _drawModules and _drawInteractables so there's one
+    // multi-layer/animated drawing path, not two.
+    _drawSpriteOwner(owner) {
+      const [anchorRow, anchorCol] = owner.anchor;
+      owner.sprites.forEach((sprite, i) => {
+        const offset = owner.spriteOffsets[i];
+        this._blitSprite(sprite, anchorRow + offset[0], anchorCol + offset[1]);
+      });
+    }
+
     _drawModules(wall) {
       // Painted from the bottom row upward (highest row index first) so
       // each module's sprite draws on top of the 6px top-face overhang
       // bleeding up from whatever sits in the row below it.
       const modules = [...wall.modules].sort((a, b) => b.anchor[0] - a.anchor[0]);
       for (const module of modules) {
-        const [anchorRow, anchorCol] = module.anchor;
-        module.sprites.forEach((sprite, i) => {
-          const offset = module.spriteOffsets[i];
-          this._blitSprite(sprite, anchorRow + offset[0], anchorCol + offset[1]);
-        });
+        this._drawSpriteOwner(module);
       }
     }
 
     _drawInteractables(interactables) {
       for (const interactable of interactables) {
-        if (!interactable.visible || !interactable.sprite) continue;
-        this._blitSprite(interactable.sprite, interactable.anchor[0], interactable.anchor[1]);
+        if (!interactable.visible || interactable.sprites.length === 0) continue;
+        this._drawSpriteOwner(interactable);
       }
     }
 
@@ -186,9 +195,14 @@ Game.Renderer = (function () {
 
       const candidates = [...roomState.roomInteractables, ...roomState.currentWall.interactables];
       for (const interactable of candidates) {
-        if (!interactable.visible || !interactable.sprite) continue;
-        const sprite = interactable.sprite;
-        const [x, y] = Renderer.spriteTopLeft(sprite, interactable.anchor[0], interactable.anchor[1]);
+        if (!interactable.visible || interactable.sprites.length === 0) continue;
+        // Hit-test against the first (canonical) layer -- same convention
+        // widthCells/heightCells use for sizing (see Objects.SpriteOwner).
+        const sprite = interactable.sprites[0];
+        const spriteOffset = interactable.spriteOffsets[0];
+        const [x, y] = Renderer.spriteTopLeft(
+          sprite, interactable.anchor[0] + spriteOffset[0], interactable.anchor[1] + spriteOffset[1]
+        );
         const [lx, ly] = logicalPos;
         if (lx >= x && lx < x + sprite.width && ly >= y && ly < y + sprite.height) {
           const localX = Math.floor(lx - x);
