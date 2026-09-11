@@ -226,6 +226,26 @@ flow back to the platform; and data logging via DataPipe → OSF (free, no
 custom backend needed) rather than anything bespoke. These are standard,
 well-documented jsPsych patterns — don't reinvent them.
 
+## New interaction model: grid-based navigation + "do" (2026-09-11)
+
+The click-anywhere interface described throughout this file (mouse click,
+alpha-channel hit-testing) is being superseded by a discrete grid
+position + directional movement + a single context-sensitive "do" action
+— needed for a valid human/agent action-space comparison (see the Notion
+"Game Prototype" page's Controls section for the full reasoning). This is
+new infrastructure, not a change to something that exists: no
+grid-position state or keyboard handling exists anywhere in this codebase
+yet.
+
+**Read `docs/design/grid-navigation.md` before touching any of this** — it
+has the full mechanic (room-level movement, per-module sub-grids, the
+navigation-ambiguity default rules, the exit/execute-and-auto-exit
+semantics) plus a fully worked example (the Furnace: which of its 2×2
+footprint tiles is interactive, its 3-cell sub-grid, the emergency button
+and heat dial, and their exact navigation graph). It also lists what's
+explicitly out of scope for this first pass — check that before assuming
+a gap needs filling.
+
 ## Going forward: where new module behavior gets written
 
 Any module behavior designed from now on (the Press's dial→output mapping,

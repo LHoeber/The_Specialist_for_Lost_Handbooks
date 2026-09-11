@@ -230,10 +230,6 @@ Game.Objects = (function () {
     static spriteNames = MODULE_SPRITES[ModuleType.TOOLBOX];
   }
 
-  class BeakerHolder extends ModuleBase {
-    static moduleType = ModuleType.BEAKER_HOLDER;
-    static spriteNames = MODULE_SPRITES[ModuleType.BEAKER_HOLDER];
-  }
 
   class Sink extends ModuleBase {
     static moduleType = ModuleType.SINK;
@@ -305,7 +301,6 @@ Game.Objects = (function () {
     [ModuleType.PRESSURE_TANK_PIPES]: PressureTankPipes,
     [ModuleType.WIDE_PIPE]: WidePipe,
     [ModuleType.TOOLBOX]: Toolbox,
-    [ModuleType.BEAKER_HOLDER]: BeakerHolder,
     [ModuleType.SINK]: Sink,
     [ModuleType.FAUCET]: Faucet,
     [ModuleType.COMPOSITION_SCANNER]: CompositionScanner,

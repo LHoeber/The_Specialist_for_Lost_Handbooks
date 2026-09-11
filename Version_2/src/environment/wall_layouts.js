@@ -54,7 +54,6 @@ Game.WallLayouts = (function () {
     PRESSURE_TANK_PIPES: "PRESSURE_TANK_PIPES",
     WIDE_PIPE: "WIDE_PIPE",
     TOOLBOX: "TOOLBOX",
-    BEAKER_HOLDER: "BEAKER_HOLDER",
     SINK: "SINK",
     FAUCET: "FAUCET",
     COMPOSITION_SCANNER: "COMPOSITION_SCANNER",
@@ -109,7 +108,6 @@ Game.WallLayouts = (function () {
     new PlacedDevice(ModuleType.FLASK_HOLDER, [0, 3]),
     new PlacedDevice(ModuleType.SHELF, [1, 1]),
     new PlacedDevice(ModuleType.DOOR, [1, 2]), // spans down into row 2
-    new PlacedDevice(ModuleType.BEAKER_HOLDER, [1, 3]),
     new PlacedDevice(ModuleType.TOOLBOX, [2, 0]),
     new PlacedDevice(ModuleType.WORKBENCH, [2, 3], {
       contents: [[InteractableType.BEAKER, [0.0, 0.0]]],

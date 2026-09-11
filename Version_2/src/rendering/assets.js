@@ -123,14 +123,18 @@ Game.Assets = (function () {
     [ModuleType.PRESSURE_TANK_PIPES]: ["devices/pressure_tank_big_pipes.png"],
     [ModuleType.WIDE_PIPE]: ["devices/wide_pipe.png"],
     [ModuleType.TOOLBOX]: ["devices/toolbox.png"],
-    [ModuleType.BEAKER_HOLDER]: ["containers/beaker_holder.png"],
     [ModuleType.SINK]: ["devices/sink.png"],
     [ModuleType.FAUCET]: ["devices/faucet.png"],
     [ModuleType.COMPOSITION_SCANNER]: ["devices/analyzer.png"],
     [ModuleType.CONTROL_PANEL]: ["devices/control_panel_off.png"],
     [ModuleType.DOOR]: ["furniture/door.png"],
     [ModuleType.WORKBENCH]: ["furniture/counter.png"],
-    [ModuleType.CLOCK]: ["devices/clock.png"],
+    [ModuleType.CLOCK]: ["devices/clock.png",
+      { path: "devices/clock_number_0.png", frames: [10], channels: 1, seconds: 1, frame_width: 32, frame_height: 38 },
+      { path: "devices/clock_number_1.png", frames: [10], channels: 1, seconds: 10, frame_width: 32, frame_height: 38 },
+      { path: "devices/clock_number_2.png", frames: [10], channels: 1, seconds: 60, frame_width: 32, frame_height: 38 },
+      { path: "devices/clock_number_3.png", frames: [10], channels: 1, seconds: 600, frame_width: 32, frame_height: 38 },
+    ]
   };
 
   // One default sprite per interactable type. POWER_PLUG is intentionally
