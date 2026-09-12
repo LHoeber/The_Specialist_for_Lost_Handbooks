@@ -25,12 +25,40 @@ hierarchical "do"** (approach 3) is what gets built. This doc is the
 concrete mechanic spec plus the first worked example (the Furnace); the
 Notion page is the design rationale, this file is the build spec.
 
+## Mouse click is being removed entirely, not kept alongside this (2026-09-11)
+
+Decided after the first version of this doc: the free click-anywhere
+interface doesn't just lose the human/agent-parity argument, it's also a
+worse fit for the actual research comparison than it looked — clicking
+lets you jump straight to any point on screen, which is further from the
+VR exploration paradigm this game is meant to be a controlled, discrete
+analog of (see the RTG-meeting context handoff and the LeWorldModel notes
+in the Claude project) than it first appeared. In VR you can't teleport
+either — you move continuously through adjacent space, and where you're
+looking/heading is itself part of what's being measured (attention,
+approach behavior). Grid movement is a closer discrete stand-in for that
+than a mouse click ever was, not just a compromise for agent-compatibility.
+
+So: **`rendering/ui.js`'s click listener, `renderer.js`'s alpha-channel
+hit-testing (`find_interactable_at`), and the `MoveArrowLeft`/
+`MoveArrowRight` interactables (and their `ROOM_INTERACTABLES` placements
+in `wall_layouts.js`) should be removed outright on this branch**, not
+left in place unused and not kept as a fallback input method. The
+pre-this-change version is preserved on the `Click_Control` git branch
+specifically so this branch is free to delete rather than special-case
+around it. If `screen_to_logical`/coordinate-scaling code in `renderer.js`
+is still needed for anything else (e.g. resizing), keep only that part.
+
 ## General mechanic
 
 ### Room-level grid
 
 - The player has exactly one current position, `(row, column)`, on the
-  currently-viewed wall's grid at all times.
+  currently-viewed wall's grid at all times. **Starting position on load**
+  isn't otherwise constrained by anything designed so far — `[1, 0]` on
+  wall 0 (middle row, leftmost module column) is a reasonable arbitrary
+  default; change it freely if a different starting point reads better
+  once it's running.
 - The navigable grid extends beyond the existing 3×4 module grid
   (`GRID_ROWS`/`GRID_COLS` in `config.js`) to include the floor and
   ceiling half-rows (`FLOOR_ROWS`/`CEIL_ROWS`) — every cell, including
@@ -38,15 +66,43 @@ Notion page is the design rationale, this file is the build spec.
   does nothing there yet. This is deliberate: it keeps the whole space
   addressable now so content can be added later without changing the
   navigation model.
-- Movement: up/down/left/right between adjacent cells. Key bindings
-  aren't specified here — pick something sensible (e.g. arrow keys +
-  space/enter for "do") and note the choice where you bind it.
+- Movement: up/down/left/right between adjacent cells, bound to **both**
+  the arrow keys and WASD simultaneously (either works interchangeably at
+  any time, not a mode the player switches between). "do" is bound to
+  **space**.
+- Vertical movement has no analog to wall rotation: at the top edge
+  (ceiling row) or bottom edge (floor row), moving further up/down is
+  simply a no-op — you stay put. Only horizontal movement wraps (see
+  "Wall-to-wall rotation" below).
 - "do": performs whatever unambiguous action is defined for the player's
   current position. If nothing is defined there (an empty tile, or a
   module whose action isn't built yet), it's a silent no-op — this
   matches the project's existing "never pre-filter legal actions, let the
   environment resolve outcome" stance (also in the Notion Controls
   section) — don't build a legality check that hides the option instead.
+
+### Wall-to-wall rotation (replaces the click-based arrows entirely)
+
+The `MoveArrowLeft`/`MoveArrowRight` interactables are removed, not
+repositioned into a do-triggered cell — rotation is a consequence of
+movement itself, not a separate action:
+
+- Moving left/right normally, within columns 0..3 (`GRID_COLS - 1`), just
+  moves the player one column as usual — reaching column 0 or column 3
+  is not itself special, it's a normal position.
+- Rotation triggers only on the *next* move past that edge: pressing left
+  again while already at column 0, or right again while already at
+  column 3, switches `currentWallIndex` (reusing `RoomState.rotate()`'s
+  existing step-and-modulo logic in `state.js`) and re-renders the new
+  wall — a genuine two-step motion (move to the edge, then move again),
+  not an instant trigger from merely arriving at the edge column.
+- **Landing position after rotating**: the opposite edge column, same
+  row — rotating right lands you at column 0 of the new wall; rotating
+  left lands you at column 3 of the new wall; the row is unchanged
+  either way. This is deliberate continuity ("walked around the corner"),
+  not a reset to a fixed spawn point.
+- This applies uniformly across every row, including the floor/ceiling
+  half-rows — no special-casing by row.
 
 ### Modules without sub-functions
 
@@ -92,6 +148,20 @@ A module "opts in" to a sub-grid explicitly — most modules don't have one
   defaults to the **leftmost** column. These are the only two ambiguity
   shapes possible under rectangular sectioning, so no other case needs a
   rule.
+
+### Keep movement/do as a shared, input-agnostic function
+
+This redesign exists specifically so a human and an artificial agent can
+eventually act through the same interface (see "Why this exists" above)
+— that only holds if the actual game logic isn't entangled with the
+keyboard listener itself. Structure this as a small dispatch function
+(e.g. `performAction(direction | "do")`) that mutates player/room state
+and triggers a re-render, with the keyboard event handler doing nothing
+but translating a keypress into a call to that function. A future
+scripted agent should be able to drive the exact same function directly,
+without touching the DOM at all — if that's not true of whatever gets
+built here, the human/agent parity this mechanic exists for hasn't
+actually been achieved.
 
 ### Visual feedback
 
@@ -139,20 +209,49 @@ the lower option → exit. **The button is therefore only reachable via the
 exit cell, not directly from the dial** — a direct, intended consequence
 of the "prefer lower" default, not a gap to fix.
 
+## Existing behavior carried over: Workbench cabinet door
+
+The Workbench's door predates this whole mechanic (it already works via
+click today) and stays exactly as designed — it's simpler than the
+Furnace: no sub-grid, just two ordinary room-level tiles whose "do"
+behavior depends on the door's current state, not a location you enter:
+
+- **Closed** (default): "do" at the Workbench's own anchor tile opens it.
+- **Open**: the door sprite swings out far enough to visually cover the
+  tile immediately to its right (anchor `+ [0, 1]`) — already handled on
+  the rendering side (the open-door sprite blits there instead of at the
+  anchor; see the sprite change made earlier this session). The
+  *interactive* surface moves with it: "do" now closes the door only
+  from that right-hand tile — "do" at the anchor tile while open is a
+  no-op, not a second way to close it.
+- Revealed contents (the Beaker in Wall 0's Workbench at `[2,3]`, the
+  Compressor in Wall 3's at `[2,0]`) become visible at the anchor tile
+  once open, same as today, but per "explicitly out of scope" below
+  they're not interactively reachable via "do" yet — standing there and
+  pressing "do" is a no-op for now, not an error.
+
+**Check before implementing**: `wall_layouts.js` places three Workbenches
+in a row on Wall 2 — `[2,0]`, `[2,1]`, `[2,2]` — so opening the one at
+`[2,0]` would visually cover `[2,1]`, which is itself a Workbench with
+its own door. This wasn't addressed when the doors were originally
+designed (a floating click never forced the conflict into view); confirm
+with Laura whether overlapping doors there is fine or needs a different
+rule for adjacent Workbenches, rather than guessing.
+
 ## Explicitly out of scope for this pass
 
 - Flask in/out and door open/close for the Furnace — no tile assigned,
   don't design placement for them yet.
-- Whether wall-to-wall rotation (currently the click-based
-  `MoveArrowLeft`/`MoveArrowRight` interactables) gets folded into this
-  same grid+do model (e.g. moving off the grid's left/right edge triggers
-  rotation) is undecided. Leave the existing arrow-click mechanic as-is;
-  don't merge the two systems in this pass.
-- Whether the existing mouse-click hit-testing in `rendering/ui.js` is
-  removed, disabled, or kept alongside the new keyboard-driven system is
-  left to your judgment here — the new system needs to work standalone
-  since it's what's being demoed, but fully retiring the old one isn't
-  required to satisfy this task.
+- The Workbench's revealed contents (once its door is open) aren't
+  interactively reachable via "do" in this pass — see "Existing behavior
+  carried over: Workbench cabinet door" above for exactly what *is* in
+  scope for the door itself.
+- The Orientation section's second point ("you can only see one side of a
+  machine and walk around it discretely between all 4") is a *different*
+  mechanic from the Furnace's sub-grid built above — that one is about
+  circling an individual machine to see its other faces, and nothing in
+  this pass builds it. Don't conflate the two: the Furnace's sub-grid is
+  entered from one fixed face, not walked around.
 
 ## Where this fits in the existing code
 
@@ -160,6 +259,23 @@ of the "prefer lower" default, not a gap to fix.
   legacy `new Dial([1.0, 0.5], this)`. That offset predates this spec and
   belongs to the old click-based model — replace it with the sub-grid
   definition above rather than keeping both.
+- `MoveArrowLeft`/`MoveArrowRight` (in `objects.js`'s `INTERACTABLE_CLASSES`
+  and `wall_layouts.js`'s `ROOM_INTERACTABLES`) are removed, not just
+  unused — rotation is now a consequence of movement past the grid edge
+  (see "Wall-to-wall rotation" above), not a separate clickable
+  interactable. `RoomState.rotate()` in `state.js` still does the actual
+  wall-index switching; only what calls it changes.
+- `rendering/ui.js`'s click listener and `renderer.js`'s alpha-channel
+  hit-test (`find_interactable_at`) are removed, per "Mouse click is
+  being removed entirely" above — replaced by the keyboard-driven
+  dispatch function described under "Keep movement/do as a shared,
+  input-agnostic function".
+- `CabinetDoor.onClick` in `objects.js` currently doesn't care where it
+  was triggered from — one click anywhere on its sprite always just
+  toggles `this.open`. Under "do", it needs to become position-aware (see
+  "Existing behavior carried over: Workbench cabinet door" above): open
+  only fires from the anchor tile, close only fires from `anchor + [0,1]`
+  — this is new logic, not a straight port of the existing method.
 - This is new state layered on top of `RoomState`/`Wall`
   (`environment/state.js`) — expect to add the player's current grid
   position and current sub-grid-or-null somewhere in that vicinity.

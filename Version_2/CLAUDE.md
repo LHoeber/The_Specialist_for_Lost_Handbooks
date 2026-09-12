@@ -229,22 +229,33 @@ well-documented jsPsych patterns — don't reinvent them.
 ## New interaction model: grid-based navigation + "do" (2026-09-11)
 
 The click-anywhere interface described throughout this file (mouse click,
-alpha-channel hit-testing) is being superseded by a discrete grid
-position + directional movement + a single context-sensitive "do" action
-— needed for a valid human/agent action-space comparison (see the Notion
-"Game Prototype" page's Controls section for the full reasoning). This is
-new infrastructure, not a change to something that exists: no
-grid-position state or keyboard handling exists anywhere in this codebase
-yet.
+alpha-channel hit-testing) is being **removed outright**, not kept
+alongside something new — replaced by a discrete grid position +
+directional movement + a single context-sensitive "do" action. This is
+needed for a valid human/agent action-space comparison, and turns out to
+also be a closer discrete analog of the project's VR exploration paradigm
+than free clicking was (continuous movement through adjacent space, no
+teleporting to an arbitrary point) — see the Notion "Game Prototype"
+page's Controls section for the full reasoning. This is new
+infrastructure, not a change to something that exists: no grid-position
+state or keyboard handling exists anywhere in this codebase yet.
+
+The pre-this-change version (the entire click-based interface described
+in "Porting map" and "What actually needs to reach parity" below) is
+preserved on the **`Click_Control`** git branch — that content is now
+historical on this branch, not a fallback to keep working. Don't leave
+`rendering/ui.js`'s click listener or `renderer.js`'s
+`find_interactable_at` in place unused; remove them.
 
 **Read `docs/design/grid-navigation.md` before touching any of this** — it
-has the full mechanic (room-level movement, per-module sub-grids, the
-navigation-ambiguity default rules, the exit/execute-and-auto-exit
-semantics) plus a fully worked example (the Furnace: which of its 2×2
-footprint tiles is interactive, its 3-cell sub-grid, the emergency button
-and heat dial, and their exact navigation graph). It also lists what's
-explicitly out of scope for this first pass — check that before assuming
-a gap needs filling.
+has the full mechanic (room-level movement, wall-to-wall rotation now
+driven by movement itself rather than clickable arrows, per-module
+sub-grids, the navigation-ambiguity default rules, the exit/
+execute-and-auto-exit semantics) plus a fully worked example (the
+Furnace: which of its 2×2 footprint tiles is interactive, its 3-cell
+sub-grid, the emergency button and heat dial, and their exact navigation
+graph). It also lists what's explicitly out of scope for this first pass
+— check that before assuming a gap needs filling.
 
 ## Going forward: where new module behavior gets written
 

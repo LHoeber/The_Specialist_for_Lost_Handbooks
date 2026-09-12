@@ -1,29 +1,46 @@
 /**
- * Direct player input: translates mouse clicks into interactable actions.
- * Port of Version_1/src/rendering/ui.py; event.pos there was already
- * window-relative, so the one adaptation here is converting the browser's
- * viewport-relative clientX/clientY into canvas-local coordinates via the
- * canvas's own bounding rect.
+ * Direct player input: translates keypresses into calls to
+ * RoomState.performAction. Replaces the old mouse-click interface entirely
+ * (see docs/design/grid-navigation.md) -- this file does nothing but
+ * translate a keypress into a call to that shared, input-agnostic
+ * function, so a future scripted agent can drive the exact same function
+ * directly without touching the DOM at all.
  */
 window.Game = window.Game || {};
 
 Game.UI = (function () {
+  const { Direction } = Game.Enums;
+
+  // Arrow keys and WASD both work interchangeably at all times, not a mode
+  // the player switches between; "do" is bound to space.
+  const KEY_ACTIONS = {
+    ArrowUp: Direction.UP,
+    w: Direction.UP,
+    W: Direction.UP,
+    ArrowDown: Direction.DOWN,
+    s: Direction.DOWN,
+    S: Direction.DOWN,
+    ArrowLeft: Direction.LEFT,
+    a: Direction.LEFT,
+    A: Direction.LEFT,
+    ArrowRight: Direction.RIGHT,
+    d: Direction.RIGHT,
+    D: Direction.RIGHT,
+    " ": "do",
+  };
+
   class UIController {
-    constructor(renderer) {
-      this.renderer = renderer;
+    constructor(roomState) {
+      this.roomState = roomState;
     }
 
-    handleClick(event, roomState) {
-      const rect = this.renderer.canvas.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-      const logicalPos = this.renderer.screenToLogical(x, y);
-      const interactable = this.renderer.findInteractableAt(logicalPos, roomState);
-      if (interactable !== null) {
-        interactable.onClick(roomState);
-      }
+    handleKeyDown(event) {
+      const action = KEY_ACTIONS[event.key];
+      if (action === undefined) return;
+      event.preventDefault(); // space/arrows would otherwise scroll the page
+      this.roomState.performAction(action);
     }
   }
 
-  return { UIController };
+  return { UIController, KEY_ACTIONS };
 })();

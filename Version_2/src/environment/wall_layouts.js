@@ -13,9 +13,11 @@
  * A device's own interactables (buttons, dials, ...) are NOT listed here --
  * each module class builds the ones intrinsic to it in its own constructor
  * (e.g. every Centrifuge owns a Button), so there is nothing to keep in sync
- * with this file when devices are added, removed or reordered. The only
- * interactables still declared as data are the room-level ones with no
- * device of their own -- see ROOM_INTERACTABLES at the bottom.
+ * with this file when devices are added, removed or reordered. There used
+ * to also be room-level interactables with no device of their own (the
+ * click-based movement arrows) -- removed per
+ * docs/design/grid-navigation.md: wall-to-wall rotation is now a
+ * consequence of movement itself, not a placed interactable.
  *
  * Grid convention: [row, column], origin top-left. Each wall is 3 rows (0-2)
  * wide enough for a 4-column grid (0-3); a 0.5-cell floor strip sits below
@@ -63,16 +65,14 @@ Game.WallLayouts = (function () {
     CLOCK: "CLOCK",
   });
 
-  // Small UI elements attached to a device (or, for the movement arrows,
-  // standalone at the room level). See the "Interactables" table in the
-  // Game Prototype Notion page. LEVEL_INDICATOR, POWER_PLUG and COMPRESSOR
-  // appear in the wall diagrams but aren't described in that table yet.
+  // Small UI elements attached to a device. See the "Interactables" table in
+  // the Game Prototype Notion page. LEVEL_INDICATOR, POWER_PLUG and
+  // COMPRESSOR appear in the wall diagrams but aren't described in that
+  // table yet. MOVE_ARROW_LEFT/RIGHT are gone -- see grid-navigation.md.
   const InteractableType = Object.freeze({
     BUTTON: "BUTTON",
     LEVER: "LEVER",
     DIAL: "DIAL",
-    MOVE_ARROW_LEFT: "MOVE_ARROW_LEFT",
-    MOVE_ARROW_RIGHT: "MOVE_ARROW_RIGHT",
     LEVEL_INDICATOR: "LEVEL_INDICATOR", // "Levels" (wall 0) / "Pressure Indicator" (wall 3) -- undocumented, verify
     POWER_PLUG: "POWER_PLUG", // wall 2 -- undocumented, verify
     COMPRESSOR: "COMPRESSOR", // a possible Workbench content -- undocumented, verify
@@ -85,13 +85,6 @@ Game.WallLayouts = (function () {
       this.type = type;
       this.anchor = anchor; // [row, column] of the device's top-left cell
       this.kwargs = kwargs; // extra per-instance constructor args, rarely needed
-    }
-  }
-
-  class PlacedInteractable {
-    constructor(type, offset) {
-      this.type = type;
-      this.offset = offset; // [row, column], relative to the room origin
     }
   }
 
@@ -168,21 +161,10 @@ Game.WallLayouts = (function () {
 
   const WALLS = [WALL_0_DEVICES, WALL_1_DEVICES, WALL_2_DEVICES, WALL_3_DEVICES];
 
-  // The movement arrows are standalone room-level interactables, not
-  // attached to a device. They sit at the wall's middle row, in the
-  // half-cell side margins outside the 4-column device grid (column -0.5
-  // and 3.5), so they never overlap a placed module.
-  const ROOM_INTERACTABLES = [
-    new PlacedInteractable(InteractableType.MOVE_ARROW_LEFT, [1, -0.5]),
-    new PlacedInteractable(InteractableType.MOVE_ARROW_RIGHT, [1, 3.5]),
-  ];
-
   return {
     ModuleType,
     InteractableType,
     PlacedDevice,
-    PlacedInteractable,
     WALLS,
-    ROOM_INTERACTABLES,
   };
 })();

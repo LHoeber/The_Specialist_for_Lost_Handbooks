@@ -14,7 +14,19 @@ window.Game = window.Game || {};
 Game.Objects = (function () {
   const { TILE_SIZE, TOP_FACE_OVERHANG } = Game.Config;
   const { Direction, ModuleType, InteractableType } = Game.Enums;
-  const { MODULE_SPRITES, INTERACTABLE_SPRITES, CABINET_DOOR_SPRITES, loadImage } = Game.Assets;
+  const {
+    MODULE_SPRITES,
+    INTERACTABLE_SPRITES,
+    LEVEL_SPRITES,
+    BUTTON_SPRITES,
+    CABINET_DOOR_SPRITES,
+    FURNACE_HEAT_SPRITES,
+    loadImage,
+  } = Game.Assets;
+
+  // How long Button's pressed-flash step shows before settling onto on/off
+  // -- see Button.doAction / SpriteOwner.playAnimation.
+  const BUTTON_FLASH_SECONDS = 0.15;
 
   /**
    * Shared sprite-owning behavior for anything drawn as one or more layered
@@ -57,6 +69,28 @@ Game.Objects = (function () {
           );
         })
       );
+      // A one-shot or looping timed sprite sequence started by
+      // playAnimation(), temporarily overriding the sprites/spriteOffsets
+      // layers above -- see that method and Renderer._advanceAnimation.
+      this._animation = null;
+    }
+
+    /**
+     * Starts a timed sprite sequence that temporarily overrides this
+     * owner's whole display (not a specific layer): each step shows
+     * `step.sprite` for `step.seconds`, in order. `loop:false` (default)
+     * plays once, then runs `onFinish` -- typically a setSprites() call
+     * for whatever should persist afterwards -- and reverts to the normal
+     * sprites/spriteOffsets layers; `loop:true` cycles the steps forever
+     * instead of ever finishing. Used for e.g. Button's pressed-flash.
+     * Actually resolved against elapsed wall-clock time once per render by
+     * Renderer._advanceAnimation, the same evaluate-per-frame approach
+     * already used for animated sprite-sheet frames (_currentFrame).
+     */
+    playAnimation(steps, { loop = false, onFinish = null } = {}) {
+      // onFinish ... lambda function, that will be executed after animation ends
+      // steps ... list of {sprites, duration}
+      this._animation = { steps, startedAt: performance.now() / 1000, loop, onFinish };
     }
 
     // Swaps which sprite(s) this owner draws (e.g. CabinetDoor's open vs.
@@ -82,6 +116,83 @@ Game.Objects = (function () {
     }
   }
 
+  /**
+   * One subcell of a module's sub-grid (see SubGrid below): a rectangular
+   * region of the single 32x32 tile the sub-grid lives in. `kind` is
+   * "exit" (free of any interactable; landing point on entry, exits back
+   * to room-level) or "action" (has one `interactable` whose `doAction`
+   * runs, then auto-exits).
+   *
+   * `anchor` is [row0, col0], the cell's top-left corner as a 0..1 fraction
+   * of the tile; `size` is [height, width], same units, defaulting to the
+   * interactable's own sprite size (via SpriteOwner's heightCells/
+   * widthCells) when omitted -- pass `size` explicitly only when the
+   * desired footprint doesn't match the sprite's native size (e.g. the
+   * Furnace's heatIndicator cell below, which is deliberately half-width
+   * regardless of that icon's actual pixel dimensions).
+   */
+  class SubGridCell {
+    constructor(anchor, kind, interactable = null, size = null) {
+      this.anchor = anchor;
+      this.kind = kind; // "exit" | "action"
+      this.interactable = interactable;
+      // if size is given, use that; otherwise check if interactable has a size, else default to 1x1
+      this.size = size ?? (interactable ? [interactable.heightCells, interactable.widthCells] : [1, 1]);
+    }
+
+    // [row0, row1, col0, col1] fractions, derived from anchor + size --
+    // SubGrid.move()'s adjacency math and the renderer both read this shape,
+    // unchanged by the anchor/size rework above.
+    get rect() {
+      const [row0, col0] = this.anchor;
+      const [h, w] = this.size;
+      // for checking start/end of rows/cols
+      return { row0, row1: row0 + h, col0, col1: col0 + w };
+    }
+  }
+
+  /**
+   * A module's sub-grid: discrete rectangular sectioning of its one
+   * designated interactive tile (see docs/design/grid-navigation.md). Move
+   * resolution is pure geometry (which cell shares the right border for a
+   * rightward move, etc.) plus the two fixed tie-break defaults for the
+   * only ambiguity shapes rectangular sectioning can produce: a horizontal
+   * move into a multi-row-spanning target prefers the lower row; a
+   * vertical move into a multi-column-spanning target prefers the
+   * leftmost column.
+   */
+  class SubGrid {
+    constructor(cells) {
+      this.cells = cells;
+      this.exitIndex = cells.findIndex((cell) => cell.kind === "exit");
+    }
+
+    move(fromIndex, direction) {
+      const from = this.cells[fromIndex].rect;
+      const candidates = this.cells.filter((cell, index) => {
+        if (index === fromIndex) return false;
+        const r = cell.rect;
+        const rowsOverlap = r.row0 < from.row1 && r.row1 > from.row0;//common row idices
+        const colsOverlap = r.col0 < from.col1 && r.col1 > from.col0;//common col indices
+        // same row and directly adjacent
+        if (direction === Direction.LEFT) return r.col1 === from.col0 && rowsOverlap;
+        if (direction === Direction.RIGHT) return r.col0 === from.col1 && rowsOverlap;
+        // same column and directly adjacent
+        if (direction === Direction.UP) return r.row1 === from.row0 && colsOverlap;
+        if (direction === Direction.DOWN) return r.row0 === from.row1 && colsOverlap;
+        return false;
+      });
+      if (candidates.length === 0) return fromIndex; // sub-grid edge -- stay put
+      const horizontal = direction === Direction.LEFT || direction === Direction.RIGHT;
+      // reducer defines the first checked variable as best and then iteratively updates
+      const winner = candidates.reduce((best, cell) => {
+        if (horizontal) return cell.rect.row0 > best.rect.row0 ? cell : best; // prefer lower row
+        return cell.rect.col0 < best.rect.col0 ? cell : best; // prefer leftmost column
+      });
+      return this.cells.indexOf(winner);
+    }
+  }
+
   /** Shared behavior for every machine module / furniture piece. */
   class ModuleBase extends SpriteOwner {
     static moduleType = null;
@@ -94,16 +205,71 @@ Game.Objects = (function () {
       // Interactables this module owns (buttons, dials, ...), positioned
       // relative to its own anchor. Empty unless a subclass adds its own.
       this.interactables = [];
+      // Any number of this module's occupied tiles can "opt in" to a
+      // sub-grid (see Furnace below for a worked example) -- each entry is
+      // `{offset, grid}`, `offset` being that tile's [row, col] offset from
+      // the module's own anchor and `grid` a SubGrid; "do" on a tile
+      // matching some entry's offset enters that entry's grid. Empty
+      // unless a subclass adds one (most modules have none).
+      this.subGrids = [];
     }
+
+    // For a module with no sub-grid that still has exactly one direct
+    // room-level action (see "Modules without sub-functions" in
+    // grid-navigation.md) -- override in a subclass. No-op default, same
+    // convention as InteractableBase.doAction.
+    // eslint-disable-next-line no-unused-vars
+    doAction(roomState) { }
   }
 
+  /**
+   * Worked example for the sub-grid mechanic (see grid-navigation.md).
+   * Footprint is 2x2 (anchor = top-left, rows/cols [0,1] relative to it);
+   * only the top-right tile ([0,1]) hosts a sub-grid. The anchor tile
+   * itself carries a heat-state overlay layer (see FURNACE_HEAT_SPRITES)
+   * kept in sync with the sub-grid's heatIndicator cell. The other two
+   * tiles have no "do" behavior yet -- flask in/out and door open/close
+   * still need a home in a future iteration.
+   */
   class Furnace extends ModuleBase {
     static moduleType = ModuleType.FURNACE;
     static spriteNames = MODULE_SPRITES[ModuleType.FURNACE];
 
     constructor(wallIndex, anchor) {
+      // already loading all sprites and basic attributes
       super(wallIndex, anchor);
-      this.interactables = [new Dial([1.0, 0.5], this)];
+
+      // Anchor tile: base furnace body plus a heat-state overlay layer,
+      // both drawn at offset [0,0] (the anchor itself).
+      this._baseSprite = this.sprites[0];
+      // load images from all the sprite paths saved in furnace_heat_sprites to
+      this._heatSprites = FURNACE_HEAT_SPRITES.map((path) => loadImage(path, true));
+      this.heatLevel = 0; // index into _heatSprites: off/low/medium/high
+      this.setSprites([this._baseSprite, this._heatSprites[this.heatLevel]]);
+
+      // heatIndicator is only ever reached through the sub-grid cell below,
+      // never via room-level module.interactables, so its own offset/parent
+      // are inert (see InteractableBase.anchor) -- [0,0]/null is just a
+      // harmless placeholder, not a real position.
+      this.heatIndicator = new LevelIndicator([0, 0], null);
+      this.heatIndicator.doAction = () => {
+        this.heatLevel = (this.heatLevel + 1) % 4; // wraps: off -> low -> medium -> high -> off
+        this.heatIndicator.setLevel(this.heatLevel);
+        this.setSprites([this._baseSprite, this._heatSprites[this.heatLevel]]);
+      };
+      const emergencyButton = new Button([0, 0], null);
+
+      // Sub-grid, entered from tile [0,1] (upper-right of the footprint).
+      this.subGrids = [{
+        offset: [0, 1],
+        grid: new SubGrid([
+          new SubGridCell([0.5, 0], "exit", null, [0.5, 0.5]),
+          new SubGridCell([0, 0], "action", emergencyButton, [0.5, 0.5]),
+          // Explicit half-width size: LevelIndicator's icon isn't natively
+          // half-width, so the default (sprite-size) footprint wouldn't fit.
+          new SubGridCell([0, 0.5], "action", this.heatIndicator, [1, 0.5]),
+        ]),
+      }];
     }
   }
 
@@ -276,7 +442,7 @@ Game.Objects = (function () {
         const ContentClass = INTERACTABLE_CLASSES[contentType];
         return new ContentClass(offset, this, false);
       });
-      this.interactables = [...door.contents, door];
+      this.interactables = [...door.contents, door, door.closeHandle];
     }
   }
 
@@ -311,12 +477,11 @@ Game.Objects = (function () {
   };
 
   /**
-   * Shared behavior for a UI element attached to a module (or, for the
-   * movement arrows, standalone at the room level). `spriteNames` works
-   * exactly as it does for modules (see SpriteOwner) -- most interactables
-   * are one flat icon (a 1-element array), but nothing stops one from being
-   * layered (Beaker's back/front pair) or animated, the same mechanism
-   * either way.
+   * Shared behavior for a UI element attached to a module. `spriteNames`
+   * works exactly as it does for modules (see SpriteOwner) -- most
+   * interactables are one flat icon (a 1-element array), but nothing stops
+   * one from being layered (Beaker's back/front pair) or animated, the
+   * same mechanism either way.
    */
   class InteractableBase extends SpriteOwner {
     static interactableType = null;
@@ -332,21 +497,44 @@ Game.Objects = (function () {
       this.visible = visible;
     }
 
+    // Placeholder: concrete interactables override this once their specific
+    // action is designed. No-op by default. Called by RoomState.performAction
+    // ("do") -- see grid-navigation.md's "shared, input-agnostic function".
     // eslint-disable-next-line no-unused-vars
-    onClick(roomState) {
-      // Placeholder: concrete interactables override this once their
-      // specific action is designed. No-op by default.
-    }
+    doAction(roomState) { }
 
     get anchor() {
+      // use parent anchor coordiantes as relative anchor, or if no parent exists, default to [0,0]
       const parentAnchor = this.parent !== null ? this.parent.anchor : [0, 0];
       return [parentAnchor[0] + this.offset[0], parentAnchor[1] + this.offset[1]];
     }
   }
 
+  /**
+   * Toggles between off/on -- see Assets.BUTTON_SPRITES. Each "do" briefly
+   * flashes the pressed sprite, then settles onto (and holds) whichever of
+   * on/off it just switched to, without blocking input in the meantime --
+   * see SpriteOwner.playAnimation.
+   */
   class Button extends InteractableBase {
     static interactableType = InteractableType.BUTTON;
-    static spriteNames = [INTERACTABLE_SPRITES[InteractableType.BUTTON]];
+
+    constructor(offset, parent = null, visible = true) {
+      super(offset, parent, visible);
+      this.on = false;
+      this._offSprite = loadImage(BUTTON_SPRITES.off);
+      this._pressedSprite = loadImage(BUTTON_SPRITES.pressed);
+      this._onSprite = loadImage(BUTTON_SPRITES.on);
+      this.setSprites([this._offSprite]);
+    }
+
+    doAction(_roomState) {
+      const goingOn = !this.on;//toggle on/off, depending on current state
+      this.on = goingOn;
+      this.playAnimation([{ sprite: this._pressedSprite, seconds: BUTTON_FLASH_SECONDS }], {
+        onFinish: () => this.setSprites([goingOn ? this._onSprite : this._offSprite]),
+      });
+    }
   }
 
   class Lever extends InteractableBase {
@@ -359,9 +547,21 @@ Game.Objects = (function () {
     static spriteNames = [INTERACTABLE_SPRITES[InteractableType.DIAL]];
   }
 
+  /** Cycles through off/low/medium/high -- see Assets.LEVEL_SPRITES. */
   class LevelIndicator extends InteractableBase {
     static interactableType = InteractableType.LEVEL_INDICATOR;
-    static spriteNames = [INTERACTABLE_SPRITES[InteractableType.LEVEL_INDICATOR]];
+
+    constructor(offset, parent = null, visible = true) {
+      super(offset, parent, visible);
+      this._levelSprites = LEVEL_SPRITES.map((path) => loadImage(path));
+      this.level = 0;
+      this.setSprites([this._levelSprites[0]]);
+    }
+
+    setLevel(level) {
+      this.level = level;
+      this.setSprites([this._levelSprites[level]]);
+    }
   }
 
   class Compressor extends InteractableBase {
@@ -377,13 +577,13 @@ Game.Objects = (function () {
   }
 
   /**
-   * A container's own door/hatch: toggles open/closed and reveals whichever
-   * content interactables its owning module attaches afterward via
-   * `.contents` (see Workbench). Open/closed are alternative single-sprite
-   * states (only one shown at a time), not layers drawn together, which is
-   * why this swaps the whole `sprites` array on click rather than using
-   * `spriteNames` -- a genuinely different case from Beaker's simultaneous
-   * back/front layers, not a parallel implementation of the same thing.
+   * The Workbench's own door/hatch (see grid-navigation.md, "Existing
+   * behavior carried over: Workbench cabinet door"). Closed (default): "do"
+   * at the anchor tile opens it. Open: the anchor tile goes empty and the
+   * door's own open sprite (see Assets.CABINET_DOOR_SPRITES) is drawn on
+   * the tile to the right (anchor + [0,1]) instead, where a companion
+   * CabinetDoorCloseHandle becomes visible; "do" at the anchor while open
+   * is a no-op (not a second way to close it), matching the spec exactly.
    */
   class CabinetDoor extends InteractableBase {
     static interactableType = InteractableType.CABINET_DOOR;
@@ -396,13 +596,42 @@ Game.Objects = (function () {
       this._closedSprite = loadImage(CABINET_DOOR_SPRITES.closed, true);
       this._openSprite = loadImage(CABINET_DOOR_SPRITES.open, true);
       this.setSprites([this._closedSprite]);
+      this.closeHandle = new CabinetDoorCloseHandle([offset[0], offset[1] + 1], parent, this);
     }
 
-    onClick(_roomState) {
-      this.open = !this.open;
-      this.setSprites([this.open ? this._openSprite : this._closedSprite]);
+    doAction(_roomState) {
+      if (this.open) return; // no-op -- closing only happens from closeHandle's tile
+      this.open = true;
+      this.setSprites([]);
+      // The door's own open sprite is what actually gets drawn, now at the
+      // tile to the right instead of at the anchor.
+      this.closeHandle.setSprites([this._openSprite]);
+      this.closeHandle.visible = true;
       for (const item of this.contents) {
-        item.visible = this.open;
+        item.visible = true;
+      }
+    }
+  }
+
+  /**
+   * The tile a CabinetDoor's panel swings open onto (anchor + [0,1]). Not
+   * placed via wall_layouts.js data like other interactables -- it's always
+   * constructed directly by its CabinetDoor, which also owns showing/hiding
+   * it and setting its sprite (the door's own open sprite -- see
+   * CabinetDoor.doAction). Invisible with no sprite until the door opens.
+   */
+  class CabinetDoorCloseHandle extends InteractableBase {
+    constructor(offset, parent, door) {
+      super(offset, parent, false);
+      this.door = door;
+    }
+
+    doAction(_roomState) {
+      this.door.open = false;
+      this.door.setSprites([this.door._closedSprite]);
+      this.visible = false;
+      for (const item of this.door.contents) {
+        item.visible = false;
       }
     }
   }
@@ -416,24 +645,6 @@ Game.Objects = (function () {
     static spriteNames = [];
   }
 
-  class MoveArrowLeft extends InteractableBase {
-    static interactableType = InteractableType.MOVE_ARROW_LEFT;
-    static spriteNames = [INTERACTABLE_SPRITES[InteractableType.MOVE_ARROW_LEFT]];
-
-    onClick(roomState) {
-      roomState.rotate(Direction.LEFT);
-    }
-  }
-
-  class MoveArrowRight extends InteractableBase {
-    static interactableType = InteractableType.MOVE_ARROW_RIGHT;
-    static spriteNames = [INTERACTABLE_SPRITES[InteractableType.MOVE_ARROW_RIGHT]];
-
-    onClick(roomState) {
-      roomState.rotate(Direction.RIGHT);
-    }
-  }
-
   const INTERACTABLE_CLASSES = {
     [InteractableType.BUTTON]: Button,
     [InteractableType.LEVER]: Lever,
@@ -443,13 +654,13 @@ Game.Objects = (function () {
     [InteractableType.POWER_PLUG]: PowerPlug,
     [InteractableType.CABINET_DOOR]: CabinetDoor,
     [InteractableType.BEAKER]: Beaker,
-    [InteractableType.MOVE_ARROW_LEFT]: MoveArrowLeft,
-    [InteractableType.MOVE_ARROW_RIGHT]: MoveArrowRight,
   };
 
   return {
     ModuleBase,
     MODULE_CLASSES,
+    SubGrid,
+    SubGridCell,
     InteractableBase,
     Button,
     Lever,
@@ -458,9 +669,8 @@ Game.Objects = (function () {
     Compressor,
     Beaker,
     CabinetDoor,
+    CabinetDoorCloseHandle,
     PowerPlug,
-    MoveArrowLeft,
-    MoveArrowRight,
     INTERACTABLE_CLASSES,
   };
 })();

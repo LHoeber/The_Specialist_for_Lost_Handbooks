@@ -139,17 +139,43 @@ Game.Assets = (function () {
 
   // One default sprite per interactable type. POWER_PLUG is intentionally
   // absent: per docs/design/game-prototype.md it isn't placed on any wall
-  // yet and no sprite has been decided for it.
+  // yet and no sprite has been decided for it. MOVE_ARROW_LEFT/RIGHT are
+  // gone along with the click-based interface they belonged to (see
+  // docs/design/grid-navigation.md) -- wall-to-wall rotation is now a
+  // consequence of movement, not a clickable interactable.
   const INTERACTABLE_SPRITES = {
-    [InteractableType.BUTTON]: "indicators/button_off.png",
     [InteractableType.LEVER]: "indicators/lever_up.png",
     [InteractableType.DIAL]: "indicators/dial_0.png",
-    [InteractableType.MOVE_ARROW_LEFT]: "indicators/move_left.png",
-    [InteractableType.MOVE_ARROW_RIGHT]: "indicators/move_right.png",
-    [InteractableType.LEVEL_INDICATOR]: "indicators/levels_off.png",
     [InteractableType.COMPRESSOR]: "devices/counter_compressor.png",
     [InteractableType.BEAKER]: ["containers/beaker_back.png", "containers/beaker_front.png"],
   };
+
+  // LevelIndicator cycles through these four sprites (see Objects.LevelIndicator.setLevel).
+  const LEVEL_SPRITES = [
+    "indicators/levels_off.png",
+    "indicators/levels_low.png",
+    "indicators/levels_medium.png",
+    "indicators/levels_high.png",
+  ];
+
+  // Button's 3-sprite flash-then-settle sequence (see Objects.Button.doAction):
+  // "do" briefly shows `pressed`, then settles onto (and holds) `on` or `off`.
+  const BUTTON_SPRITES = {
+    off: "indicators/button_off.png",
+    pressed: "indicators/button_pressed.png",
+    on: "indicators/button_on.png",
+  };
+
+  // Furnace's heat-level overlay, layered onto the module's own base sprite
+  // at its anchor tile (see Objects.Furnace) -- distinct from LEVEL_SPRITES,
+  // which is the small on-face level icon shown in its sub-grid, not the
+  // furnace body itself.
+  const FURNACE_HEAT_SPRITES = [
+    "devices/furnace_off.png",
+    "devices/furnace_low.png",
+    "devices/furnace_medium.png",
+    "devices/furnace_high.png",
+  ];
 
   const BACKGROUND_SPRITES = {
     wall_tile: "background/wall_tiles.png",
@@ -159,9 +185,12 @@ Game.Assets = (function () {
 
   // A Workbench's door has two states rather than one fixed sprite, so it
   // doesn't fit INTERACTABLE_SPRITES above -- see Objects.CabinetDoor.
+  // `open` is what's actually drawn on the closeHandle tile once the door
+  // swings out to the right; `closed` only ever appears back at the door's
+  // own anchor.
   const CABINET_DOOR_SPRITES = {
-    closed: "furniture/counter_doors_closed.png",
-    open: "furniture/counter_doors_opened.png",
+    closed: "furniture/counter_door_closed.png",
+    open: "furniture/counter_door_opened.png",
   };
 
   return {
@@ -171,6 +200,9 @@ Game.Assets = (function () {
     whenAllLoaded,
     MODULE_SPRITES,
     INTERACTABLE_SPRITES,
+    LEVEL_SPRITES,
+    BUTTON_SPRITES,
+    FURNACE_HEAT_SPRITES,
     BACKGROUND_SPRITES,
     CABINET_DOOR_SPRITES,
   };

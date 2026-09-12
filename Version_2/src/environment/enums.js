@@ -9,7 +9,10 @@
 window.Game = window.Game || {};
 
 Game.Enums = (function () {
-  const Direction = Object.freeze({ LEFT: "LEFT", RIGHT: "RIGHT" });
+  // Room-level movement (also doubles as sub-grid movement -- see
+  // Objects.SubGrid.move) plus wall-to-wall rotation, which now reuses
+  // LEFT/RIGHT rather than a separate concept (see grid-navigation.md).
+  const Direction = Object.freeze({ UP: "UP", DOWN: "DOWN", LEFT: "LEFT", RIGHT: "RIGHT" });
 
   return {
     ModuleType: Game.WallLayouts.ModuleType,
