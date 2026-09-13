@@ -200,9 +200,23 @@ Game.Renderer = (function () {
       }
     }
 
+    // Two passes: normal interactables first, then anything flagged
+    // renderAboveNeighbors (see Objects.InteractableBase) in a second pass
+    // -- so a panel that physically lands on a neighboring module's own
+    // tile always covers it, regardless of which module comes first in
+    // wall_layouts.js's list (that order has no relation to which one
+    // physically overlaps another).
     _drawInteractables(interactables) {
+      const foreground = [];
       for (const interactable of interactables) {
         if (!interactable.visible || interactable.sprites.length === 0) continue;
+        if (interactable.renderAboveNeighbors) {
+          foreground.push(interactable);
+          continue;
+        }
+        this._drawSpriteOwner(interactable);
+      }
+      for (const interactable of foreground) {
         this._drawSpriteOwner(interactable);
       }
     }

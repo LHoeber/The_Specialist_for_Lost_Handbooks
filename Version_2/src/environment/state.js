@@ -39,6 +39,20 @@ Game.State = (function () {
       });
       this.interactables = this.modules.flatMap((module) => module.interactables);
     }
+
+    // The currently-visible renderAboveNeighbors interactable occupying
+    // this tile (excluding `excluding` itself), if any -- e.g. a Workbench
+    // door's swung-open panel. Used to detect whether some other action's
+    // target tile is already covered by such a panel (see
+    // Objects.CabinetDoor/CabinetDoorCloseHandle.doAction) -- the same
+    // renderAboveNeighbors flag Renderer._drawInteractables uses to decide
+    // draw order also defines what counts as "in the way" here, so the two
+    // can't drift apart.
+    foregroundOccupantAt(row, col, excluding = null) {
+      return this.interactables.find(
+        (i) => i !== excluding && i.renderAboveNeighbors && i.visible && i.anchor[0] === row && i.anchor[1] === col
+      );
+    }
   }
 
   /**
@@ -122,10 +136,17 @@ Game.State = (function () {
       const wall = this.currentWall;
       const [row, col] = this.playerPosition;
 
-      const target = wall.interactables.find(
+      // If more than one interactable currently shares this tile (e.g. a
+      // neighboring counter's open-door panel sitting on this module's own
+      // anchor), "do" acts on whichever one is actually drawn on top --
+      // see Objects.InteractableBase.renderAboveNeighbors and
+      // Renderer._drawInteractables, which uses the same flag for draw
+      // order so the two can't disagree.
+      const matches = wall.interactables.filter(
         (i) => i.visible && i.anchor[0] === row && i.anchor[1] === col
       );
-      if (target) {
+      if (matches.length > 0) {
+        const target = matches.find((i) => i.renderAboveNeighbors) ?? matches[0];
         target.doAction(this);
         return;
       }

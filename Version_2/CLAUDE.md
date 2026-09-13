@@ -257,6 +257,26 @@ sub-grid, the emergency button and heat dial, and their exact navigation
 graph). It also lists what's explicitly out of scope for this first pass
 — check that before assuming a gap needs filling.
 
+## Beaker, mixture and placeable-object mechanics (2026-09-13)
+
+The Beaker can now be picked up into a single inventory slot, carried, and
+set down at other stations — a new, general **placeable object / placeable
+slot** mechanism, built on top of (not replacing) the grid-navigation "do"
+dispatch above. The Beaker is the first thing that uses it, not the only
+thing it's meant for.
+
+**Read `docs/design/beaker-mixture-mechanics.md` before touching any of
+this** — it covers the placeable-slot system itself (how "do" now
+prioritizes placing/picking up over a tile's normal action), the new
+BeakerHolder module and where the game's one Beaker instance starts, how
+FlaskHolder/Dishes fill it (only while it's sitting in the BeakerHolder),
+the overflow/no-beaker spill visuals, how the mixture's ingredient order
+renders (tinted alpha masks, not pre-colored art), and which processing
+stations already accept a placed beaker this pass with no behavior wired to
+it yet. It also lists what's explicitly deferred (breaking/shattering,
+spill cleanup, pouring/transfer, actual mixture processing) — check that
+before assuming a gap needs filling.
+
 ## Going forward: where new module behavior gets written
 
 Any module behavior designed from now on (the Press's dial→output mapping,

@@ -109,7 +109,7 @@ Game.Assets = (function () {
     [ModuleType.MIXER]: ["devices/mixer_back.png", "devices/mixer_front.png"],
     [ModuleType.PACKAGING_STATION]: ["devices/packaging_station.png"],
     [ModuleType.FILTER]: ["devices/filter.png"],
-    [ModuleType.FUME_HOOD]: ["devices/fume_hood_back.png", { path: "devices/ventilator.png", frames: [5], channels: 1, seconds: 0.05, frame_width: 32, frame_height: 38 }
+    [ModuleType.FUME_HOOD]: ["devices/fume_hood_back.png", { path: "devices/ventilator.png", frames: [10], channels: 1, seconds: 0.08, frame_width: 32, frame_height: 38 }
       , "devices/fume_hood_front.png"],
     [ModuleType.CONNECTOR_BOX]: ["devices/connector_box.png"],
     [ModuleType.FUSE_BOX]: ["devices/fuse_box.png"],
@@ -123,8 +123,9 @@ Game.Assets = (function () {
     [ModuleType.PRESSURE_TANK_PIPES]: ["devices/pressure_tank_big_pipes.png"],
     [ModuleType.WIDE_PIPE]: ["devices/wide_pipe.png"],
     [ModuleType.TOOLBOX]: ["devices/toolbox.png"],
-    [ModuleType.SINK]: ["devices/sink.png"],
-    [ModuleType.FAUCET]: ["devices/faucet.png"],
+    [ModuleType.SINK]: ["devices/sink.png", "devices/sink_front.png"],
+    [ModuleType.FAUCET]: ["devices/faucet.png", "devices/faucet_front_off.png",
+      { path: "devices/faucet_front_on.png", frames: [4], channels: 1, seconds: 0.1, frame_width: 32, frame_height: 38 }],
     [ModuleType.COMPOSITION_SCANNER]: ["devices/analyzer.png"],
     [ModuleType.CONTROL_PANEL]: ["devices/control_panel_off.png"],
     [ModuleType.DOOR]: ["furniture/door.png"],

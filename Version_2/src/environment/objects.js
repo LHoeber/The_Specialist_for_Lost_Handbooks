@@ -495,6 +495,15 @@ Game.Objects = (function () {
       this.offset = offset; // [row, column] relative to the parent module's anchor
       this.parent = parent; // a ModuleBase instance, or null for room-level
       this.visible = visible;
+      // Almost every interactable is a same-elevation icon on its own
+      // tile, so draw order between two different modules' interactables
+      // (e.g. wall_layouts.js's list order) never matters in practice.
+      // Set true only for something that *physically* extends onto a
+      // neighboring tile it doesn't own (see CabinetDoorCloseHandle) --
+      // Renderer._drawInteractables draws every such flagged interactable
+      // in a second pass, after all normal ones, so it always covers
+      // whatever else is on that tile rather than being covered by it.
+      this.renderAboveNeighbors = false;
     }
 
     // Placeholder: concrete interactables override this once their specific
@@ -599,8 +608,13 @@ Game.Objects = (function () {
       this.closeHandle = new CabinetDoorCloseHandle([offset[0], offset[1] + 1], parent, this);
     }
 
-    doAction(_roomState) {
+    doAction(roomState) {
       if (this.open) return; // no-op -- closing only happens from closeHandle's tile
+      // Don't swing open onto a tile some other panel already occupies
+      // (e.g. a neighboring counter's own open door) -- silent no-op, same
+      // as any other blocked action here. See Wall.foregroundOccupantAt.
+      const [row, col] = this.closeHandle.anchor;
+      if (roomState.currentWall.foregroundOccupantAt(row, col, this.closeHandle)) return;
       this.open = true;
       this.setSprites([]);
       // The door's own open sprite is what actually gets drawn, now at the
@@ -624,9 +638,21 @@ Game.Objects = (function () {
     constructor(offset, parent, door) {
       super(offset, parent, false);
       this.door = door;
+      // The panel physically covers whatever tile it lands on (often a
+      // neighboring module's own anchor, e.g. an adjacent Workbench's own
+      // closed door) -- it must always draw on top of that, not be drawn
+      // over by it. See InteractableBase.renderAboveNeighbors.
+      this.renderAboveNeighbors = true;
     }
 
-    doAction(_roomState) {
+    doAction(roomState) {
+      // Don't close back onto the door's own anchor tile if some other
+      // panel has since landed there (e.g. a neighboring counter opened
+      // after this one did) -- that tile is occupied until that other
+      // panel clears, so this "do" silently does nothing, same as any
+      // other blocked action here. See Wall.foregroundOccupantAt.
+      const [row, col] = this.door.anchor;
+      if (roomState.currentWall.foregroundOccupantAt(row, col, this)) return;
       this.door.open = false;
       this.door.setSprites([this.door._closedSprite]);
       this.visible = false;
